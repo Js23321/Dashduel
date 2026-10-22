@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DASHDUEL — Movement Arena Shooter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="DASHDUEL: a fast, competitive first-person arena shooter. Slide, bunny hop, air strafe and wall run. Hitscan guns with zero recoil and zero spread.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ===================== IN-GAME HUD ===================== -->
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="blast"></div>
+  <div id="dmg-layer"></div>
+
+  <div id="crosshair">
+    <i class="xh xt"></i><i class="xh xb"></i><i class="xh xl"></i><i class="xh xr"></i><i class="xdot"></i>
+    <div id="hitmarker"><i></i><i></i><i></i><i></i></div>
+    <div id="dmgnums"></div>
+  </div>
+
+  <div id="nade-hold" class="hidden"><i></i></div>
+
+  <div id="hud-top">
+    <div id="duel-banner" class="hidden">
+      <div class="tp-side"><span id="tp-me">YOU</span><b id="tp-you">0</b></div>
+      <div class="tp-mid" id="tp-round"></div>
+      <div class="tp-side right"><b id="tp-bot">0</b><span id="tp-botname">BOT</span></div>
+    </div>
+    <div id="hud-timer"></div>
+    <div id="hud-title"></div>
+    <div id="hud-sub"></div>
+    <div id="hud-split"></div>
+  </div>
+
+  <div id="hud-center"></div>
+  <div id="hud-elim"></div>
+  <div id="hud-hint"></div>
+  <div id="hud-feed"></div>
+  <div id="fps"></div>
+
+  <div id="cp-marker"><div class="cp-icon"></div><div class="cp-dist"></div></div>
+
+  <div id="hud-left">
+    <div class="vital" id="vital-hp">
+      <i class="ic" data-ic="health"></i><b id="hp-val">100</b>
+      <span class="bar"><i id="hp-fill"></i></span>
+    </div>
+  </div>
+
+  <div id="hud-right">
+    <div id="weapon-name"></div>
+    <div class="ammo-line"><span id="ammo-val">30</span><span id="ammo-max">/ 30</span></div>
+    <div id="reload-label">RELOADING</div>
+  </div>
+
+  <div id="hud-bottom">
+    <div id="hud-speed">
+      <span id="speed-val">0</span><span class="speed-unit">m/s</span>
+      <span id="speed-bar"><i id="speed-fill"></i></span>
+      <span id="state-label"></span><span id="top-speed">top 0.0</span>
+    </div>
+    <div id="weapon-bar"></div>
+  </div>
+
+  <div id="hud-practice" class="hidden">
+    <div><kbd>Q</kbd> spawn &nbsp; <kbd>E</kbd> set spawn &nbsp; <kbd>T</kbd> reset</div>
+    <div id="practice-stats"></div>
+  </div>
+
+  <div id="death-screen" class="hidden">
+    <div class="ds-label">ELIMINATED</div>
+    <div class="ds-name" id="ds-name"></div>
+    <div class="ds-resp" id="ds-resp"></div>
+  </div>
+
+  <div id="match-banner" class="hidden"></div>
+  <div id="scoreboard" class="hidden"></div>
+  <div id="toast"></div>
+</div>
+
+<!-- ===================== MENUS ===================== -->
+<div id="screens">
+
+  <!-- Main -->
+  <section id="scr-main" class="screen">
+    <div class="menu-grid">
+      <div class="menu-left">
+        <div class="brand"><span class="brand-mark"></span><b>DASHDUEL</b></div>
+        <div class="who"><span class="who-l">Playing as</span><b id="who-name">&mdash;</b><button class="chip" id="btn-change-name">Change name</button></div>
+        <div class="eyebrow">Play</div>
+        <div class="menu-list">
+          <button class="menu-item mode-card" data-mode="online" data-autofocus><span class="mi-n">01</span><span class="mi-t">Online 1v1</span><span class="mi-d">Real players. Queue up, first to 5 rounds</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="duel"><span class="mi-n">02</span><span class="mi-t">Duel</span><span class="mi-d">1v1 against an AI, first to win rounds</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="arena"><span class="mi-n">03</span><span class="mi-t">Deathmatch</span><span class="mi-d">Free-for-all against several bots</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="timetrial"><span class="mi-n">04</span><span class="mi-t">Time Trial</span><span class="mi-d">Race the checkpoints, beat your best</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="practice"><span class="mi-n">05</span><span class="mi-t">Practice</span><span class="mi-d">Free play with target dummies</span><i class="ic mi-go" data-ic="arrow"></i></button>
+        </div>
+        <div class="eyebrow">Profile</div>
+        <div class="menu-row">
+          <button class="chip" data-open="loadout">Loadout</button>
+          <button class="chip" data-open="settings">Settings</button>
+          <button class="chip" data-open="records">Records</button>
+          <button class="chip" data-open="help">How to play</button>
+        </div>
+        <p class="foot">Zero recoil · zero spread · hitscan guns. On a Chromebook <kbd>C</kbd> also slides, so you never need <kbd>Ctrl</kbd>. Arrow keys / <kbd>Tab</kbd> move through menus, <kbd>Enter</kbd> selects, <kbd>Esc</kbd> goes back.</p>
+      </div>
+      <div class="menu-right">
+        <div class="eyebrow">Loadout</div>
+        <div class="weapon-strip" id="main-weapons"></div>
+        <div class="eyebrow">Movement</div>
+        <div class="keyline"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>move</span><kbd>Shift</kbd><span>sprint</span><kbd>Ctrl</kbd>/<kbd>C</kbd><span>slide</span><kbd>Space</kbd><span>jump</span></div>
+        <div class="keyline"><kbd>1</kbd>–<kbd>4</kbd><span>weapons</span><kbd>R</kbd><span>reload</span><kbd>RMB</kbd><span>aim</span><kbd>Wheel</kbd><span>switch</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Username -->
+  <section id="scr-name" class="screen hidden">
+    <div class="panel narrow">
+      <div class="eyebrow">Profile</div>
+      <h2>Choose a username</h2>
+      <p class="fine" style="margin-top:0">This is the name your opponents see in online matches. 3&ndash;16 characters: letters, numbers, spaces, <kbd>_</kbd> and <kbd>-</kbd>.</p>
+      <input id="name-input" class="text" type="text" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Username">
+      <div id="name-msg" class="name-msg">&nbsp;</div>
+      <div class="stack">
+        <button id="btn-name-ok" class="btn primary" disabled>Confirm</button>
+        <button id="btn-name-rand" class="btn">Random name</button>
+        <button id="btn-name-back" class="btn ghost">Back</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Online queue -->
+  <section id="scr-queue" class="screen hidden">
+    <div class="panel narrow">
+      <div class="eyebrow">Online 1v1 &middot; first to 5</div>
+      <h2 id="queue-title">Finding an opponent</h2>
+      <div class="queue-vs"><b id="queue-me">&mdash;</b><span>vs</span><b id="queue-opp">?</b></div>
+      <div id="queue-status" class="queue-status">Connecting&hellip;</div>
+      <div id="queue-time" class="queue-time">0:00</div>
+      <p class="fine">You are matched with whoever is searching at the same time. To test it yourself, open the game in a second browser window or on another device and queue there too. Matchmaking uses a free public relay (your username is visible while searching) and then connects the two browsers directly.</p>
+      <div class="stack">
+        <button id="btn-queue-enter" class="btn primary hidden">Enter match</button>
+        <button id="btn-queue-cancel" class="btn" data-autofocus>Cancel</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Map select -->
+  <section id="scr-select" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button class="btn ghost small" data-open="main">Back</button>
+        <h2 id="sel-title">Choose a map</h2>
+        <span></span>
+      </div>
+      <div id="map-cards" class="map-cards"></div>
+      <div id="duel-opts" class="opts hidden">
+        <label>Rounds to win
+          <select id="opt-duelto"><option value="3">First to 3</option><option value="5">First to 5</option><option value="7">First to 7</option></select>
+        </label>
+        <label>Opponent
+          <select id="opt-diff-duel"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select>
+        </label>
+      </div>
+      <div id="arena-opts" class="opts hidden">
+        <label>Opponents <input id="opt-bots" type="range" min="1" max="7" step="1"><output id="out-bots"></output></label>
+        <label>Difficulty
+          <select id="opt-diff"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select>
+        </label>
+        <label>Eliminations to win
+          <select id="opt-kills"><option value="10">10</option><option value="15">15</option><option value="25">25</option></select>
+        </label>
+      </div>
+      <div class="row end"><button id="btn-start" class="btn primary">Start</button></div>
+    </div>
+  </section>
+
+  <!-- Loadout / weapon selection -->
+  <section id="scr-loadout" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button class="btn ghost small" id="loadout-back">Back</button>
+        <h2>Loadout</h2>
+        <span></span>
+      </div>
+      <p class="lede">Four weapons, one per slot. Pick the weapon you start every life with; during a match use <kbd>1</kbd>–<kbd>4</kbd> or the mouse wheel to switch.</p>
+      <div id="loadout-cards" class="loadout-cards"></div>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section id="scr-settings" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button class="btn ghost small" id="settings-back">Back</button>
+        <h2>Settings</h2>
+        <span></span>
+      </div>
+      <div class="tabs" id="settings-tabs">
+        <button data-tab="controls" class="active">Mouse &amp; ADS</button>
+        <button data-tab="keybinds">Keybinds</button>
+        <button data-tab="view">View</button>
+        <button data-tab="graphics">Graphics</button>
+        <button data-tab="audio">Audio</button>
+      </div>
+      <div id="settings-body" class="settings-body"></div>
+    </div>
+  </section>
+
+  <!-- Records -->
+  <section id="scr-records" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button class="btn ghost small" data-open="main">Back</button>
+        <h2>Records</h2>
+        <button class="btn ghost small danger" id="btn-reset-records">Reset</button>
+      </div>
+      <div id="records-body" class="records-body"></div>
+    </div>
+  </section>
+
+  <!-- Help -->
+  <section id="scr-help" class="screen hidden">
+    <div class="panel wide">
+      <div class="panel-head">
+        <button class="btn ghost small" data-open="main">Back</button>
+        <h2>How to play</h2>
+        <span></span>
+      </div>
+      <div class="help-grid">
+        <div><h3>Slide &amp; slide jump</h3><p>Hold <kbd>Ctrl</kbd> (or <kbd>C</kbd>) while running for a speed boost that keeps your momentum and fits under low gaps. Press <kbd>Space</kbd> mid-slide to launch with extra speed.</p></div>
+        <div><h3>Bunny hop &amp; air strafe</h3><p>Jump the moment you land and you lose no speed (hold <kbd>Space</kbd> for auto-hop). In the air hold <kbd>A</kbd> or <kbd>D</kbd> and turn the mouse the same way to gain speed.</p></div>
+        <div><h3>Wall run &amp; wall jump</h3><p>Jump beside a teal striped wall while holding forward to run along it. Press <kbd>Space</kbd> on any wall to push off towards where you look.</p></div>
+        <div><h3>Pads &amp; ramps</h3><p>Launch pads fling you across the arena. Run up a ramp and jump off its end to carry the climb into the air.</p></div>
+        <div><h3>Weapons <small>keys 1–4 or mouse wheel</small></h3><p><kbd>1</kbd> Assault Rifle (full-auto) · <kbd>2</kbd> Handgun (semi-auto) · <kbd>3</kbd> Fists · <kbd>4</kbd> Grenade. <kbd>F</kbd> swaps to your previous weapon. Right mouse aims down sights with the rifle and handgun.</p></div>
+        <div><h3>Fists &amp; double jump</h3><p>Equip the Fists and press <kbd>Space</kbd> once more in the air for a second jump. It refreshes when you touch the ground and works only while Fists are in your hands.</p></div>
+        <div><h3>Grenade</h3><p>Hold a mouse button to pull the pin and aim: a line shows the path and a circle shows where it lands. Release to throw. Keep holding: after 1 s the circle starts sliding towards you, slowly and then faster, and 3 s after the pin came out it touches you and explodes: a free grenade boost. 75 damage to enemies inside the 6 m blast (cover reduces it), never to you. One grenade, 30 s cooldown. <kbd>R</kbd> cancels.</p></div>
+        <div><h3>Zero recoil, zero spread</h3><p>Guns are hitscan: the instant you click, a perfectly straight ray goes through the crosshair. No recoil, no camera shake, no bullet drop. Dodging and positioning win fights.</p></div>
+      </div>
+      <p class="fine">Esc releases the mouse and pauses · <kbd>R</kbd> reload · <kbd>T</kbd> quick restart · <kbd>Q</kbd> back to checkpoint / spawn (time trial &amp; practice) · <kbd>Tab</kbd> scoreboard</p>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section id="scr-pause" class="screen hidden dim">
+    <div class="panel narrow">
+      <div class="eyebrow">Paused</div>
+      <h2 id="pause-title">Match paused</h2>
+      <div id="pause-info" class="fine"></div>
+      <div class="stack">
+        <button id="btn-resume" class="btn primary" data-autofocus>Resume</button>
+        <button id="btn-pause-loadout" class="btn">Loadout</button>
+        <button id="btn-pause-settings" class="btn">Settings</button>
+        <button id="btn-restart" class="btn">Restart</button>
+        <button id="btn-fullscreen" class="btn">Fullscreen</button>
+        <button id="btn-quit" class="btn ghost">Quit to menu</button>
+      </div>
+      <p class="fine">Click Resume (or press <kbd>Esc</kbd>) to lock the mouse again.</p>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="scr-results" class="screen hidden dim">
+    <div class="panel results-panel">
+      <div class="eyebrow">Match complete</div>
+      <h2 id="res-title">Finished</h2>
+      <div id="res-body"></div>
+      <div class="row end">
+        <button id="btn-res-menu" class="btn">Menu</button>
+        <button id="btn-retry" class="btn primary" data-autofocus>Play again</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Fatal -->
+  <section id="scr-error" class="screen hidden">
+    <div class="panel narrow"><h2>WebGL unavailable</h2>
+      <p>DASHDUEL needs WebGL to render. Open it in a current version of Chrome with hardware acceleration enabled (chrome://settings/system).</p></div>
+  </section>
+</div>
+
+<div id="loading"><span>DASH<b>DUEL</b></span></div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/collision.js"></script>
+<script src="js/player.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/vmanim.js"></script>
+<script src="js/viewmodel.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/render.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/weapons.js"></script>
+<script src="js/grenades.js"></script>
+<script src="js/bots.js"></script>
+<script src="js/modes.js"></script>
+<script src="js/net.js"></script>
+<script src="js/online.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
