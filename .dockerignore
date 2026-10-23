@@ -1,0 +1,6 @@
+_archive
+docs
+server/test
+node_modules
+*.md
+.git

@@ -1,0 +1,66 @@
+/* DASHDUEL - Theme A: TACTICAL.
+   Calm and competitive: charcoal surfaces, crisp white type, one restrained red accent, hairline borders,
+   square corners, compact HUD plates. The palette itself lives in the variables at the top of style.css
+   (the fallback), repeated here so the theme is complete on its own. Everything below is scoped to
+   <html data-theme="tactical"> (and to the Settings preview, which carries the same attribute). */
+
+[data-theme="tactical"] {
+  --bg0: #0c0e11;
+  --bg1: #101318;
+  --panel: rgba(15, 18, 22, 0.94);
+  --panel-solid: #101318;
+  --raise: #161a20;
+  --raise2: #1d2229;
+  --line: rgba(255, 255, 255, 0.09);
+  --line2: rgba(255, 255, 255, 0.18);
+  --tx: #eef1f4;
+  --tx2: #a5adb8;
+  --tx3: #6d7683;
+  --acc: #e0484f;
+  --acc-hover: #ea646a;
+  --acc-dim: rgba(224, 72, 79, 0.14);
+  --acc-line: rgba(224, 72, 79, 0.6);
+  --on-acc: #ffffff;
+  --hi: #dfe5ea;
+  --red: #e0484f;
+  --amber: #e2b04a;
+  --glass: rgba(10, 12, 15, 0.72);
+  --glass2: rgba(10, 12, 15, 0.66);
+  --glass3: rgba(10, 12, 15, 0.85);
+  --dim: rgba(8, 10, 12, 0.74);
+  --fast: 0.12s;
+  --font: "Inter", "Segoe UI", Roboto, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --pv-sky: #2a3039;
+  --pv-floor: #1a1f26;
+}
+[data-theme="tactical"] ::selection { background: var(--acc-dim); color: var(--tx); }
+
+/* ---- menus */
+[data-theme="tactical"] #scr-main {
+  background:
+    linear-gradient(90deg, rgba(10,12,15,1) 0%, rgba(10,12,15,.94) 38%, rgba(10,12,15,.82) 100%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 48px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 48px),
+    var(--bg0);
+}
+[data-theme="tactical"] #scr-select, [data-theme="tactical"] #scr-settings, [data-theme="tactical"] #scr-records,
+[data-theme="tactical"] #scr-help, [data-theme="tactical"] #scr-loadout { background: linear-gradient(180deg, rgba(10,12,15,.96), rgba(10,12,15,.99)); }
+[data-theme="tactical"] .brand b { font-weight: 600; letter-spacing: 10px; }
+[data-theme="tactical"] .menu-item { transition: background var(--fast), padding var(--fast); }
+[data-theme="tactical"] .menu-item:hover, [data-theme="tactical"] .menu-item:focus-visible { box-shadow: inset 2px 0 0 var(--acc); }
+[data-theme="tactical"] .panel { border-top: 2px solid var(--line2); }
+[data-theme="tactical"] .panel.narrow, [data-theme="tactical"] .results-panel { border-top-color: var(--acc); }
+[data-theme="tactical"] h2 { font-weight: 500; letter-spacing: 4px; }
+[data-theme="tactical"] .btn { font-weight: 500; letter-spacing: 2px; }
+[data-theme="tactical"] .btn.primary { font-weight: 600; }
+[data-theme="tactical"] .theme-btn .tb-dot { width: 8px; height: 8px; }
+[data-theme="tactical"] .res-big { font-weight: 300; }
+
+/* ---- HUD: small, quiet, out of the way */
+[data-theme="tactical"] #hud-timer { font-weight: 500; }
+[data-theme="tactical"] #hud-title, [data-theme="tactical"] #hud-sub { color: var(--tx); text-shadow: 0 0 3px rgba(0,0,0,.95), 0 1px 2px rgba(0,0,0,.9); }
+[data-theme="tactical"] .wslot { transition: color .1s, border-color .1s, background .1s; }
+[data-theme="tactical"] #match-banner { border-top-color: var(--acc); }
+[data-theme="tactical"] #hud-center { font-weight: 500; text-shadow: 0 0 4px rgba(0,0,0,.85), 0 1px 3px rgba(0,0,0,.9); }
+[data-theme="tactical"] #hud-elim b { font-weight: 600; }
+[data-theme="tactical"] .dnum { font-weight: 600; }

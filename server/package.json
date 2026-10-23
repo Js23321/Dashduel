@@ -1,0 +1,15 @@
+{
+  "name": "dashduel-server",
+  "version": "1.0.0",
+  "description": "Authoritative 1v1 game server for DASHDUEL (WebSocket matchmaking + validated match rooms). Zero dependencies.",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "start:local": "SERVE_STATIC=1 node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,481 @@
+/* DASHDUEL - Theme B: ARCADE.
+   Fast and energetic but grown-up: deep navy surfaces, one bright cyan accent against a hot orange-red for
+   the opponent / damage, angled (chamfered) panels, condensed bold type, italic numerals, bigger weapon
+   slots and louder hit + elimination feedback. Tile-based lobby, banded match screens.
+   Cheap on purpose: static clip-paths, no blur, no filters, animations only on transform / opacity.
+   Everything is scoped to <html data-theme="arcade">. */
+
+[data-theme="arcade"] {
+  --bg0: #080c18;
+  --bg1: #0c1224;
+  --panel: rgba(13, 19, 40, 0.97);
+  --panel-solid: #0d1328;
+  --raise: #141c38;
+  --raise2: #1c2749;
+  --line: rgba(120, 160, 255, 0.14);
+  --line2: rgba(140, 175, 255, 0.3);
+  --tx: #f4f7ff;
+  --tx2: #aab6d6;
+  --tx3: #7080ab;
+  --acc: #19d3f3;
+  --acc-hover: #55e2f8;
+  --acc-dim: rgba(25, 211, 243, 0.15);
+  --acc-line: rgba(25, 211, 243, 0.7);
+  --on-acc: #04141a;
+  --hi: #3ee8ff;
+  --red: #ff5a4d;
+  --amber: #ffc83d;
+  --glass: rgba(8, 12, 26, 0.8);
+  --glass2: rgba(8, 12, 26, 0.74);
+  --glass3: rgba(8, 12, 26, 0.92);
+  --dim: rgba(6, 9, 20, 0.8);
+  --fast: 0.08s;
+  --font: "Bahnschrift", "Roboto Condensed", "Arial Narrow", "Segoe UI", Roboto, system-ui, -apple-system, Arial, sans-serif;
+  --pv-sky: #1f3f7c;
+  --pv-floor: #11214a;
+  /* corner cuts (static clip-paths) */
+  --cut-s: 6px;
+  --cut-m: 10px;
+  --cut-l: 16px;
+  --clip-s: polygon(var(--cut-s) 0, 100% 0, 100% calc(100% - var(--cut-s)), calc(100% - var(--cut-s)) 100%, 0 100%, 0 var(--cut-s));
+  --clip-m: polygon(var(--cut-m) 0, 100% 0, 100% calc(100% - var(--cut-m)), calc(100% - var(--cut-m)) 100%, 0 100%, 0 var(--cut-m));
+  --clip-l: polygon(var(--cut-l) 0, 100% 0, 100% calc(100% - var(--cut-l)), calc(100% - var(--cut-l)) 100%, 0 100%, 0 var(--cut-l));
+}
+[data-theme="arcade"] ::selection { background: var(--acc-dim); color: var(--tx); }
+
+/* ============================================================ shared controls */
+[data-theme="arcade"] .btn, [data-theme="arcade"] .chip, [data-theme="arcade"] .keybtn, [data-theme="arcade"] .presets button,
+[data-theme="arcade"] select, [data-theme="arcade"] input.text, [data-theme="arcade"] .tabs button { clip-path: var(--clip-s); }
+[data-theme="arcade"] .btn { border: 0; background: var(--raise2); font-weight: 700; letter-spacing: 2px; padding: 11px 22px; box-shadow: inset 0 -2px 0 rgba(140,175,255,.22); transition: background var(--fast), transform var(--fast), box-shadow var(--fast); }
+[data-theme="arcade"] .btn:hover, [data-theme="arcade"] .btn:focus-visible { background: #26346a; border: 0; box-shadow: inset 0 -3px 0 var(--acc); outline: 0; }
+[data-theme="arcade"] .btn:active { transform: translateY(1px) scale(.99); }
+[data-theme="arcade"] .btn.primary { background: var(--acc); color: var(--on-acc); box-shadow: inset 0 -3px 0 rgba(0,0,0,.25); }
+[data-theme="arcade"] .btn.primary:hover, [data-theme="arcade"] .btn.primary:focus-visible { background: var(--acc-hover); box-shadow: inset 0 -3px 0 rgba(0,0,0,.35); }
+[data-theme="arcade"] .btn.ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line2); color: var(--tx2); }
+[data-theme="arcade"] .btn.ghost:hover, [data-theme="arcade"] .btn.ghost:focus-visible { background: var(--raise); color: var(--tx); box-shadow: inset 0 0 0 1px var(--acc-line); }
+[data-theme="arcade"] .btn.danger:hover { background: rgba(255,90,77,.2); box-shadow: inset 0 0 0 1px var(--red); }
+[data-theme="arcade"] .chip { border: 0; background: var(--raise); box-shadow: inset 0 -2px 0 var(--line2); font-weight: 700; letter-spacing: 2px; }
+[data-theme="arcade"] .chip:hover, [data-theme="arcade"] .chip:focus-visible { background: var(--raise2); color: var(--tx); border: 0; box-shadow: inset 0 -3px 0 var(--acc); }
+[data-theme="arcade"] select { border: 0; background: var(--raise2); box-shadow: inset 0 -2px 0 var(--line2); }
+[data-theme="arcade"] select:hover, [data-theme="arcade"] select:focus-visible { box-shadow: inset 0 -2px 0 var(--acc); outline: 0; }
+[data-theme="arcade"] input.text { border: 0; background: var(--raise2); box-shadow: inset 0 -2px 0 var(--line2); }
+[data-theme="arcade"] input.text:focus { box-shadow: inset 0 -3px 0 var(--acc); }
+[data-theme="arcade"] .keybtn { border: 0; background: var(--raise2); box-shadow: inset 0 -2px 0 var(--line2); }
+[data-theme="arcade"] .keybtn:hover, [data-theme="arcade"] .keybtn:focus-visible { box-shadow: inset 0 -2px 0 var(--acc); }
+[data-theme="arcade"] .keybtn.listening { box-shadow: inset 0 0 0 2px var(--acc); }
+[data-theme="arcade"] kbd { border-radius: 0; background: var(--raise2); border-color: var(--line2); }
+[data-theme="arcade"] h2 { font-style: italic; font-weight: 700; letter-spacing: 3px; font-size: 20px; }
+[data-theme="arcade"] h3 { font-weight: 700; letter-spacing: 2px; }
+[data-theme="arcade"] .eyebrow { color: var(--acc); font-weight: 700; letter-spacing: 4px; }
+
+/* sliders + switches */
+[data-theme="arcade"] input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--line2); }
+[data-theme="arcade"] input[type=range]::-webkit-slider-thumb { width: 14px; height: 18px; margin-top: -7px; background: var(--tx); clip-path: polygon(35% 0, 100% 0, 65% 100%, 0 100%); }
+[data-theme="arcade"] input[type=range]:hover::-webkit-slider-thumb, [data-theme="arcade"] input[type=range]:focus-visible::-webkit-slider-thumb { background: var(--acc); }
+[data-theme="arcade"] input[type=checkbox] { width: 40px; height: 20px; border: 0; background: var(--raise2); clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+[data-theme="arcade"] input[type=checkbox]::after { top: 3px; left: 4px; width: 14px; height: 14px; clip-path: polygon(30% 0, 100% 0, 70% 100%, 0 100%); }
+[data-theme="arcade"] input[type=checkbox]:checked { background: rgba(25,211,243,.28); }
+[data-theme="arcade"] input[type=checkbox]:checked::after { transform: translateX(18px); }
+[data-theme="arcade"] input[type=checkbox]:focus-visible { box-shadow: inset 0 0 0 2px var(--acc); outline: 0; }
+
+/* ============================================================ menus */
+[data-theme="arcade"] .screen.dim { background: var(--dim); }
+[data-theme="arcade"] #scr-main {
+  overflow-x: hidden;
+  background:
+    radial-gradient(900px 520px at 80% 8%, rgba(25,211,243,.16), transparent 62%),
+    radial-gradient(760px 520px at 4% 100%, rgba(255,90,77,.1), transparent 62%),
+    linear-gradient(180deg, #0a1124, #070b16);
+}
+[data-theme="arcade"] #scr-main::before {
+  content: ""; position: absolute; left: -120px; top: 0; right: -60px; bottom: 0; pointer-events: none; will-change: transform;
+  background: repeating-linear-gradient(115deg, rgba(120,170,255,.055) 0 2px, transparent 2px 46px);
+  animation: arc-drift 18s linear infinite;
+}
+@keyframes arc-drift { to { transform: translateX(50.8px); } }
+[data-theme="arcade"] #scr-main > * { position: relative; }
+[data-theme="arcade"] #scr-select, [data-theme="arcade"] #scr-settings, [data-theme="arcade"] #scr-records,
+[data-theme="arcade"] #scr-help, [data-theme="arcade"] #scr-loadout, [data-theme="arcade"] #scr-name, [data-theme="arcade"] #scr-queue {
+  background: radial-gradient(800px 480px at 90% 0%, rgba(25,211,243,.1), transparent 60%), linear-gradient(180deg, #0a1124, #070b16);
+}
+
+[data-theme="arcade"] .brand { gap: 14px; }
+[data-theme="arcade"] .brand b { font-size: 28px; font-style: italic; font-weight: 700; letter-spacing: 7px; }
+[data-theme="arcade"] .brand-mark { width: 22px; height: 26px; background: linear-gradient(90deg, var(--acc) 0 8px, transparent 8px 12px, var(--red) 12px 20px, transparent 20px); clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+[data-theme="arcade"] .who { background: var(--raise); padding: 8px 12px 8px 16px; margin: -16px 0 22px; clip-path: var(--clip-s); box-shadow: inset 3px 0 0 var(--acc); }
+[data-theme="arcade"] .who b { font-style: italic; font-size: 16px; }
+
+/* the lobby: a hero tile for the online queue and a grid of mode tiles */
+[data-theme="arcade"] .menu-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; border-top: 0; margin-bottom: 24px; }
+[data-theme="arcade"] .menu-item {
+  grid-template-columns: 1fr auto; grid-template-rows: auto auto 1fr; grid-template-areas: "n go" "t t" "d d"; align-content: start; row-gap: 3px; min-height: 96px; padding: 12px 16px 13px;
+  background: var(--raise); border: 0; clip-path: var(--clip-m); position: relative; text-align: left;
+  transition: transform var(--fast), background var(--fast), box-shadow var(--fast);
+}
+[data-theme="arcade"] .menu-item .mi-n { grid-area: n; font-style: italic; font-weight: 700; color: var(--tx3); }
+[data-theme="arcade"] .menu-item .mi-t { grid-area: t; align-self: start; margin-top: 8px; font-size: 19px; font-style: italic; font-weight: 700; letter-spacing: 1px; }
+[data-theme="arcade"] .menu-item .mi-d { grid-area: d; font-size: 11.5px; color: var(--tx2); line-height: 1.35; }
+[data-theme="arcade"] .menu-item .mi-go { grid-area: go; justify-self: end; opacity: .5; color: var(--acc); }
+[data-theme="arcade"] .menu-item:hover, [data-theme="arcade"] .menu-item:focus-visible { padding-left: 16px; background: var(--raise2); transform: translateY(-2px); box-shadow: inset 0 -3px 0 var(--acc); }
+[data-theme="arcade"] .menu-item:hover .mi-go, [data-theme="arcade"] .menu-item:focus-visible .mi-go { opacity: 1; transform: translateX(3px); }
+[data-theme="arcade"] .menu-item:first-child {
+  grid-column: 1 / -1; min-height: 118px; padding: 14px 20px 16px;
+  background: linear-gradient(100deg, rgba(25,211,243,.3), rgba(25,211,243,.05) 62%), var(--raise);
+  box-shadow: inset 5px 0 0 var(--acc);
+}
+[data-theme="arcade"] .menu-item:first-child .mi-t { font-size: 30px; letter-spacing: 2px; }
+[data-theme="arcade"] .menu-item:first-child .mi-d { font-size: 13px; color: var(--tx); }
+[data-theme="arcade"] .menu-item:first-child .mi-n { color: var(--acc); }
+[data-theme="arcade"] .menu-item:first-child:hover, [data-theme="arcade"] .menu-item:first-child:focus-visible { box-shadow: inset 5px 0 0 var(--acc), inset 0 -3px 0 var(--acc); }
+[data-theme="arcade"] .menu-row { gap: 6px; }
+[data-theme="arcade"] .foot { color: var(--tx3); }
+[data-theme="arcade"] .weapon-strip { gap: 8px; }
+[data-theme="arcade"] .ws { background: var(--raise); border: 0; clip-path: var(--clip-s); box-shadow: inset 0 -2px 0 var(--line2); padding: 12px 14px; }
+[data-theme="arcade"] .ws .ic { color: var(--tx); }
+[data-theme="arcade"] .ws b { font-style: italic; font-weight: 700; }
+[data-theme="arcade"] .keyline kbd { border-bottom-width: 2px; }
+
+
+/* panels */
+[data-theme="arcade"] .panel { background: var(--panel); border: 0; clip-path: var(--clip-l); box-shadow: inset 0 3px 0 var(--acc); padding: 24px 28px; }
+[data-theme="arcade"] .panel.wide { box-shadow: inset 0 3px 0 var(--acc); }
+[data-theme="arcade"] .panel-head { border-bottom: 1px solid var(--line); }
+[data-theme="arcade"] .panel-head h2 { font-size: 22px; }
+[data-theme="arcade"] .lede { color: var(--tx2); }
+
+/* tabs and presets */
+[data-theme="arcade"] .tabs { gap: 4px; border-bottom: 0; flex-wrap: wrap; margin-bottom: 14px; }
+[data-theme="arcade"] .tabs button { margin-bottom: 0; border: 0; background: var(--raise); color: var(--tx2); font-weight: 700; padding: 9px 16px; transition: background var(--fast), color var(--fast); }
+[data-theme="arcade"] .tabs button:hover { color: var(--tx); background: var(--raise2); }
+[data-theme="arcade"] .tabs button.active { background: var(--acc); color: var(--on-acc); }
+[data-theme="arcade"] .set-row { border-bottom: 1px solid var(--line); padding: 11px 6px; transition: background var(--fast); }
+[data-theme="arcade"] .set-row:hover { background: rgba(120,160,255,.05); }
+[data-theme="arcade"] .presets button { border: 0; background: var(--raise); margin-left: 3px; font-weight: 700; }
+[data-theme="arcade"] .presets button.on { background: var(--acc); color: var(--on-acc); }
+[data-theme="arcade"] .bind-table .grp td { color: var(--acc); font-weight: 700; }
+[data-theme="arcade"] .records-body h3 { color: var(--acc); }
+[data-theme="arcade"] .records-body td.v { font-style: italic; }
+[data-theme="arcade"] .xh-preview { border: 0; box-shadow: inset 0 0 0 1px var(--line2); }
+
+/* map cards + loadout cards: chamfered tiles that lift */
+[data-theme="arcade"] .card, [data-theme="arcade"] .lo-card { border: 0; clip-path: var(--clip-m); background: var(--raise); box-shadow: inset 0 -3px 0 var(--line2); transition: transform var(--fast), background var(--fast), box-shadow var(--fast); }
+[data-theme="arcade"] .card:hover, [data-theme="arcade"] .lo-card:hover { background: var(--raise2); transform: translateY(-2px); }
+[data-theme="arcade"] .card:focus-visible, [data-theme="arcade"] .lo-card:focus-visible { outline: 0; box-shadow: inset 0 0 0 2px var(--acc); }
+[data-theme="arcade"] .card.sel, [data-theme="arcade"] .lo-card.sel { background: linear-gradient(180deg, var(--acc-dim), transparent 70%), var(--raise2); box-shadow: inset 0 -4px 0 var(--acc); }
+[data-theme="arcade"] .card .swatch i { height: 6px; width: 24px; clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%); }
+[data-theme="arcade"] .card h3, [data-theme="arcade"] .lo-card h3 { font-size: 16px; font-style: italic; }
+[data-theme="arcade"] .card .tag { border: 0; background: rgba(255,255,255,.08); font-weight: 700; }
+[data-theme="arcade"] .lo-card .lo-slot { font-style: italic; font-weight: 700; color: var(--acc); }
+[data-theme="arcade"] .lo-card.sel .ic { color: var(--acc); }
+[data-theme="arcade"] .lo-stat .tr { height: 5px; background: rgba(255,255,255,.1); clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); }
+[data-theme="arcade"] .lo-card.sel .lo-stat .tr i { background: var(--acc); }
+[data-theme="arcade"] .lo-badge { border: 0; background: var(--acc); color: var(--on-acc); font-weight: 700; padding: 2px 8px; clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%); }
+
+/* queue (matchmaking) */
+[data-theme="arcade"] .queue-vs { gap: 16px; margin: 14px 0 16px; padding: 10px 0; background: linear-gradient(90deg, transparent, rgba(25,211,243,.12) 20%, rgba(255,90,77,.12) 80%, transparent); }
+[data-theme="arcade"] .queue-vs b { font-size: 20px; font-style: italic; }
+[data-theme="arcade"] .queue-vs b:first-child { color: var(--acc); }
+[data-theme="arcade"] .queue-vs span { color: var(--amber); font-weight: 700; font-style: italic; font-size: 13px; }
+[data-theme="arcade"] .queue-time { font-style: italic; font-weight: 700; font-size: 36px; }
+[data-theme="arcade"] .queue-bar { height: 4px; }
+[data-theme="arcade"] .queue-bar::after { clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+[data-theme="arcade"] .name-msg { font-weight: 600; }
+
+/* results */
+[data-theme="arcade"] .results-panel { width: 560px; }
+[data-theme="arcade"] .results-panel h2 { font-size: 30px; letter-spacing: 4px; }
+[data-theme="arcade"] .res-big { font-size: 68px; font-weight: 700; font-style: italic; color: var(--acc); }
+[data-theme="arcade"] .res-big.pb { color: var(--amber); }
+[data-theme="arcade"] .res-table td { border-top: 1px solid var(--line); }
+[data-theme="arcade"] .res-table td:last-child { font-style: italic; }
+
+/* pause */
+[data-theme="arcade"] .panel.narrow .btn { text-align: left; padding-left: 18px; transition: transform var(--fast), background var(--fast), box-shadow var(--fast); }
+[data-theme="arcade"] .panel.narrow .btn:hover, [data-theme="arcade"] .panel.narrow .btn:focus-visible { transform: translateX(4px); }
+[data-theme="arcade"] #loading { font-style: italic; font-weight: 700; }
+
+/* ============================================================ HUD */
+[data-theme="arcade"] #hud-top { top: 10px; gap: 3px; text-shadow: none; }
+[data-theme="arcade"] #duel-banner { background: none; border: 0; gap: 3px; }
+[data-theme="arcade"] #duel-banner .tp-side { border: 0; background: var(--glass3); padding: 4px 18px 5px; min-width: 128px; font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--tx); }
+[data-theme="arcade"] #duel-banner .tp-side:first-child { clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%); box-shadow: inset 0 -3px 0 var(--acc); padding-right: 24px; }
+[data-theme="arcade"] #duel-banner .tp-side.right { clip-path: polygon(14px 0, 100% 0, 100% 100%, 0 100%); box-shadow: inset 0 -3px 0 var(--red); padding-left: 24px; }
+[data-theme="arcade"] #duel-banner .tp-side b { font-size: 32px; font-style: italic; font-weight: 700; }
+[data-theme="arcade"] #duel-banner .tp-side:first-child b { color: var(--acc); }
+[data-theme="arcade"] #duel-banner .tp-side.right b { color: var(--red); }
+[data-theme="arcade"] #duel-banner .tp-mid { background: var(--glass3); color: var(--tx2); font-weight: 700; padding: 4px 14px; clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%); margin: 0 -8px; z-index: 1; }
+[data-theme="arcade"] #hud-top:has(#duel-banner:not(.hidden)) #hud-timer { margin-top: 0; }
+[data-theme="arcade"] #hud-timer { background: var(--glass3); border: 0; font-size: 19px; font-weight: 700; font-style: italic; padding: 3px 22px; clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); }
+[data-theme="arcade"] #hud-title { color: var(--acc); font-weight: 700; letter-spacing: 3px; }
+[data-theme="arcade"] #hud-title:not(:empty) { background: var(--glass3); padding: 2px 16px; clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%); }
+[data-theme="arcade"] #hud-sub { font-weight: 600; text-shadow: 0 1px 2px rgba(0,0,0,.8); }
+[data-theme="arcade"] #hud-split { font-style: italic; font-weight: 700; font-size: 20px; }
+
+[data-theme="arcade"] #hud-center { font-size: 46px; font-weight: 700; font-style: italic; letter-spacing: 6px; text-shadow: 0 3px 0 rgba(0,0,0,.55); top: 25%; }
+[data-theme="arcade"] #hud-hint { background: var(--glass3); border: 0; clip-path: var(--clip-s); box-shadow: inset 3px 0 0 var(--acc); font-weight: 600; padding: 6px 16px; }
+
+/* crosshair + hit confirmation: a ring that expands on every hit, red and larger on an elimination */
+[data-theme="arcade"] #hitmarker i { width: 3px; height: 9px; left: -1.5px; top: -20px; transform-origin: 1.5px 20px; }
+[data-theme="arcade"] #hitmarker::before {
+  content: ""; position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border: 2px solid rgba(255,255,255,.9); border-radius: 50%;
+  opacity: 0; transform: scale(.5);
+}
+[data-theme="arcade"] #hitmarker.on::before { opacity: 1; transform: scale(.55); transition: none; }
+[data-theme="arcade"] #hitmarker.fade::before { opacity: 0; transform: scale(1.5); transition: transform .24s ease-out, opacity .24s ease-out; }
+[data-theme="arcade"] #hitmarker.kill i { height: 13px; top: -24px; transform-origin: 1.5px 24px; background: var(--red); }
+[data-theme="arcade"] #hitmarker.kill::before { border-color: var(--red); border-width: 3px; left: -19px; top: -19px; width: 38px; height: 38px; }
+[data-theme="arcade"] #hitmarker.fade { transition: opacity .26s ease-out; }
+[data-theme="arcade"] .dnum { font-size: 17px; font-style: italic; font-weight: 700; text-shadow: 0 2px 0 rgba(0,0,0,.7), 0 0 4px rgba(0,0,0,.8); }
+[data-theme="arcade"] .dnum.head { font-size: 22px; }
+[data-theme="arcade"] .dnum.kill { font-size: 22px; }
+[data-theme="arcade"] .dnum.head.kill { font-size: 26px; }
+[data-theme="arcade"] #nade-hold { height: 5px; width: 90px; clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); box-shadow: none; background: rgba(255,255,255,.18); }
+[data-theme="arcade"] #nade-hold i { background: var(--amber); }
+[data-theme="arcade"] #nade-hold.closing i { background: var(--red); }
+[data-theme="arcade"] #vignette { background: radial-gradient(ellipse at center, rgba(255,90,77,0) 48%, rgba(255,90,77,.5) 100%); }
+[data-theme="arcade"] .dmg::before { height: 5px; width: 90px; margin-left: -45px; }
+
+/* elimination: an orange-red strip under the crosshair */
+[data-theme="arcade"] #hud-elim {
+  top: calc(50% + 56px); font-size: 14px; font-weight: 700; letter-spacing: 2px; padding: 6px 24px 6px 14px; text-shadow: none; color: #fff;
+  background: rgba(255,90,77,.94); clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+[data-theme="arcade"] #hud-elim b { color: #fff; background: rgba(0,0,0,.3); padding: 2px 9px; margin-right: 12px; font-size: 10px; letter-spacing: 2px; }
+
+/* kill feed */
+[data-theme="arcade"] #hud-feed { gap: 4px; }
+[data-theme="arcade"] .kf { background: var(--glass3); border: 0; box-shadow: inset 3px 0 0 var(--line2); clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%); padding: 5px 12px 5px 18px; font-weight: 600; animation: arc-feed .16s ease-out; }
+[data-theme="arcade"] .kf.k { background: linear-gradient(90deg, rgba(25,211,243,.3), rgba(25,211,243,.04)), rgba(8,12,26,.92); box-shadow: inset 3px 0 0 var(--acc); }
+[data-theme="arcade"] .kf.d { background: linear-gradient(90deg, rgba(255,90,77,.32), rgba(255,90,77,.04)), rgba(8,12,26,.92); box-shadow: inset 3px 0 0 var(--red); }
+[data-theme="arcade"] .kf.k .you { color: var(--acc); }
+[data-theme="arcade"] .kf .ic { color: var(--tx); }
+@keyframes arc-feed { from { opacity: 0; transform: translateX(14px); } }
+
+/* health: a segmented bar with a big italic number */
+[data-theme="arcade"] #hud-left { left: 22px; bottom: 22px; }
+[data-theme="arcade"] .vital { width: 244px; gap: 10px; padding: 7px 22px 9px 14px; background: var(--glass3); border: 0; clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 100%, 0 100%); box-shadow: inset 4px 0 0 var(--acc); }
+[data-theme="arcade"] .vital .ic { width: 21px; height: 21px; color: var(--acc); }
+[data-theme="arcade"] .vital b { font-size: 36px; font-style: italic; font-weight: 700; min-width: 66px; }
+[data-theme="arcade"] .vital .bar { height: 9px; position: relative; background: rgba(255,255,255,.1); clip-path: none; }
+[data-theme="arcade"] .vital .bar i { background: var(--acc); }
+[data-theme="arcade"] .vital .bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 11px, rgba(8,12,26,.95) 11px 14px); }
+[data-theme="arcade"] #vital-hp.low b, [data-theme="arcade"] #vital-hp.low .ic { color: var(--red); }
+[data-theme="arcade"] #vital-hp.low .bar i { background: var(--red); animation: arc-low .5s ease-in-out infinite alternate; }
+[data-theme="arcade"] #vital-hp.low { box-shadow: inset 4px 0 0 var(--red); }
+@keyframes arc-low { to { opacity: .55; } }
+
+/* ammo */
+[data-theme="arcade"] #hud-right { right: 22px; bottom: 22px; min-width: 176px; padding: 8px 20px 10px 26px; background: var(--glass3); border: 0; clip-path: polygon(16px 0, 100% 0, 100% 100%, 0 100%); box-shadow: inset -4px 0 0 var(--acc); }
+[data-theme="arcade"] #weapon-name { color: var(--acc); font-weight: 700; font-size: 11px; letter-spacing: 3px; }
+[data-theme="arcade"] #ammo-val { font-size: 48px; font-style: italic; font-weight: 700; }
+[data-theme="arcade"] #ammo-max { font-size: 17px; font-style: italic; }
+[data-theme="arcade"] #hud-right.low #ammo-val { color: var(--amber); }
+[data-theme="arcade"] #hud-right.empty #ammo-val { color: var(--red); }
+[data-theme="arcade"] #reload-label { color: var(--amber); font-weight: 700; }
+
+/* weapon slots: bigger, lifted when selected */
+[data-theme="arcade"] #hud-bottom { bottom: 22px; gap: 10px; }
+[data-theme="arcade"] #weapon-bar { gap: 6px; }
+[data-theme="arcade"] .wslot { width: 74px; height: 56px; background: var(--glass3); border: 0; clip-path: var(--clip-s); color: var(--tx3); box-shadow: inset 0 -2px 0 rgba(255,255,255,.1); transition: transform .08s, background .08s, color .08s; }
+[data-theme="arcade"] .wslot .wn { left: 0; top: 0; padding: 1px 9px 1px 6px; background: rgba(255,255,255,.12); color: var(--tx2); font-size: 11px; font-weight: 700; clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+[data-theme="arcade"] .wslot .ic { width: 46px; height: 25px; margin-top: 6px; }
+[data-theme="arcade"] .wslot.on { transform: translateY(-6px); background: linear-gradient(rgba(25,211,243,.26), rgba(25,211,243,.26)), rgba(8,12,26,.94); color: #fff; box-shadow: inset 0 -4px 0 var(--acc); border: 0; }
+[data-theme="arcade"] .wslot.on::after { content: none; }
+[data-theme="arcade"] .wslot.on .wn { background: var(--acc); color: var(--on-acc); }
+[data-theme="arcade"] .wslot .cnt { right: 6px; top: 3px; font-size: 12px; font-weight: 700; color: var(--tx); }
+[data-theme="arcade"] .wslot .cd { height: 4px; background: var(--amber); }
+[data-theme="arcade"] .wslot .dj { left: 6px; bottom: 5px; }
+[data-theme="arcade"] .wslot .dj .ic { width: 11px; height: 11px; margin: 0; color: var(--acc); }
+[data-theme="arcade"] .wslot .dj.used .ic { color: var(--tx3); }
+[data-theme="arcade"] #speed-val { font-style: italic; }
+[data-theme="arcade"] #speed-bar i { background: var(--acc); }
+[data-theme="arcade"] #state-label, [data-theme="arcade"] #reload-label { font-weight: 700; }
+
+/* death + match screens: banded, not boxed */
+[data-theme="arcade"] #death-screen { background: radial-gradient(ellipse at center, rgba(8,12,26,.1), rgba(8,12,26,.7)); }
+[data-theme="arcade"] #death-screen::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 150px; margin-top: -85px;
+  background: linear-gradient(90deg, transparent, rgba(255,90,77,.26) 18%, rgba(255,90,77,.26) 82%, transparent);
+}
+[data-theme="arcade"] #death-screen > * { position: relative; }
+[data-theme="arcade"] .ds-label { color: #fff; background: var(--red); font-weight: 700; letter-spacing: 8px; font-size: 12px; padding: 3px 8px 3px 16px; clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); }
+[data-theme="arcade"] .ds-name { font-size: 38px; font-weight: 700; font-style: italic; letter-spacing: 3px; }
+[data-theme="arcade"] .ds-resp { color: var(--amber); font-weight: 700; font-style: italic; font-size: 16px; }
+[data-theme="arcade"] #match-banner { width: 480px; background: var(--panel); border: 0; clip-path: var(--clip-l); box-shadow: inset 0 4px 0 var(--acc); padding: 20px 30px 16px; }
+[data-theme="arcade"] #match-banner .mb-title { color: var(--acc); font-weight: 700; font-style: italic; letter-spacing: 8px; }
+[data-theme="arcade"] #match-banner .mb-big { font-size: 66px; font-weight: 700; font-style: italic; }
+[data-theme="arcade"] #match-banner .mb-rows b { font-style: italic; }
+[data-theme="arcade"] #match-banner .mb-next { color: var(--amber); font-weight: 700; }
+[data-theme="arcade"] #scoreboard { background: var(--panel); border: 0; clip-path: var(--clip-l); box-shadow: inset 0 3px 0 var(--acc); padding: 14px 18px; }
+[data-theme="arcade"] #scoreboard th { color: var(--acc); font-weight: 700; }
+[data-theme="arcade"] #scoreboard td { font-style: italic; }
+[data-theme="arcade"] #toast { background: var(--glass3); border: 0; clip-path: var(--clip-s); box-shadow: inset 3px 0 0 var(--acc); font-weight: 600; padding: 7px 18px; }
+[data-theme="arcade"] #hud-practice { background: var(--glass3); border: 0; clip-path: var(--clip-s); box-shadow: inset 3px 0 0 var(--acc); }
+[data-theme="arcade"] #duel-banner, [data-theme="arcade"] #hud-timer { text-shadow: none; }
+[data-theme="arcade"] .cp-icon { border-color: var(--acc); }
+
+/* short windows (Chromebooks, small laptops): tighter tiles so the lobby needs less scrolling */
+@media (max-height: 700px) {
+  [data-theme="arcade"] .menu-item { min-height: 74px; padding: 8px 14px 10px; }
+  [data-theme="arcade"] .menu-item:first-child { min-height: 92px; }
+  [data-theme="arcade"] .menu-item:first-child .mi-t { font-size: 26px; }
+  [data-theme="arcade"] .menu-item .mi-t { margin-top: 2px; }
+  [data-theme="arcade"] .brand { margin-bottom: 18px; }
+  [data-theme="arcade"] .who { margin-bottom: 14px; }
+}
+
+/* ============================================================================================================
+   LAYOUT - RIVALS-style arrangement of the existing Arcade components.
+   Everything in this block only moves, sizes or aligns components that already exist above. No colours, fonts,
+   borders, icons, backgrounds, effects or animations are defined here (the one new element, the grenade count,
+   reuses the slot-count look). Tactical is not touched.
+   ============================================================================================================ */
+
+/* ---- HUD -------------------------------------------------------------------------------------------------- */
+/* top centre: [YOU score | timer | OPP score] as one compact row; the round label and the mode title sit underneath */
+[data-theme="arcade"] #hud-top { display: grid; grid-template-columns: auto auto auto; justify-content: center; justify-items: center; align-items: stretch; gap: 0 3px; }
+[data-theme="arcade"] #duel-banner { display: contents; }
+[data-theme="arcade"] #duel-banner .tp-side:first-child { grid-column: 1; grid-row: 1; }
+[data-theme="arcade"] #hud-timer { grid-column: 2; grid-row: 1; margin: 0 -8px; position: relative; z-index: 1; }
+[data-theme="arcade"] #duel-banner .tp-side.right { grid-column: 3; grid-row: 1; }
+[data-theme="arcade"] #duel-banner .tp-mid { grid-column: 1 / -1; grid-row: 2; margin: 3px 0 0; }
+[data-theme="arcade"] #hud-title { grid-column: 1 / -1; grid-row: 3; margin-top: 3px; }
+[data-theme="arcade"] #hud-sub { grid-column: 1 / -1; grid-row: 4; margin-top: 3px; }
+[data-theme="arcade"] #hud-split { grid-column: 1 / -1; grid-row: 5; }
+
+/* top right: kill feed, stacked, level with the top bar */
+[data-theme="arcade"] #hud-feed { top: 10px; right: 16px; }
+
+/* bottom: health (left), hotbar (centre), weapon + ammo + grenades (right) share one baseline and hug the corners */
+[data-theme="arcade"] #hud-left { left: 16px; bottom: 16px; }
+[data-theme="arcade"] #hud-bottom { bottom: 16px; }
+[data-theme="arcade"] #hud-right {
+  right: 16px; bottom: 16px; display: grid; grid-template-columns: auto 1fr; grid-template-areas: "name name" "ammo ammo" "gren rel"; align-items: center; column-gap: 12px;
+}
+[data-theme="arcade"] #weapon-name { grid-area: name; }
+[data-theme="arcade"] .ammo-line { grid-area: ammo; }
+[data-theme="arcade"] #reload-label { grid-area: rel; }
+[data-theme="arcade"] #hud-grenades { grid-area: gren; display: flex; align-items: center; gap: 5px; margin-top: 3px; font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--tx); }
+[data-theme="arcade"] #hud-grenades .ic { width: 14px; height: 14px; color: var(--tx2); }
+[data-theme="arcade"] #hud-grenades.out { opacity: .5; }
+
+/* toast: keeps its distance above the hotbar when the HUD scales with the window */
+[data-theme="arcade"] #toast { bottom: calc(112px * var(--hs)); }
+
+/* ---- pause menu: Resume and Quit full width, the secondary buttons in two columns ---------------------------- */
+[data-theme="arcade"] #scr-pause .panel.narrow { width: 440px; }
+[data-theme="arcade"] #scr-pause .stack { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+[data-theme="arcade"] #scr-pause .stack #btn-resume, [data-theme="arcade"] #scr-pause .stack #btn-quit { grid-column: 1 / -1; }
+[data-theme="arcade"] #scr-pause .stack:has(#btn-restart.hidden) #btn-fullscreen { grid-column: 1 / -1; }
+
+/* ---- settings: category tabs become a side column, options use the full height --------------------------- */
+[data-theme="arcade"] #scr-settings .panel.wide { display: grid; grid-template-columns: 180px minmax(0, 1fr); grid-template-rows: auto 1fr; column-gap: 26px; align-content: start; }
+[data-theme="arcade"] #scr-settings .panel-head { grid-column: 1 / -1; }
+[data-theme="arcade"] #scr-settings .tabs { grid-column: 1; grid-row: 2; flex-direction: column; flex-wrap: nowrap; align-self: start; margin-bottom: 0; }
+[data-theme="arcade"] #scr-settings .tabs button { text-align: left; }
+[data-theme="arcade"] #scr-settings .settings-body { grid-column: 2; grid-row: 2; }
+
+/* ---- match end: the in-match banner becomes a compact two-column card above the crosshair ----------------- */
+[data-theme="arcade"] #match-banner {
+  width: min(640px, calc(100vw - 24px)); top: max(27%, 182px); display: grid; grid-template-columns: 1fr minmax(190px, 240px); grid-template-areas: "title rows" "big rows" "sub rows" "next next"; column-gap: 26px; align-items: center;
+}
+[data-theme="arcade"] #match-banner .mb-title { grid-area: title; }
+[data-theme="arcade"] #match-banner .mb-big { grid-area: big; }
+[data-theme="arcade"] #match-banner .mb-sub { grid-area: sub; margin-bottom: 4px; }
+[data-theme="arcade"] #match-banner .mb-rows { grid-area: rows; align-self: center; }
+[data-theme="arcade"] #match-banner .mb-next { grid-area: next; }
+/* the banner replaces the centre message and hint instead of printing over them */
+[data-theme="arcade"] #hud:has(#match-banner:not(.hidden)) :is(#hud-center, #hud-hint) { visibility: hidden; }
+/* scoreboard (hold Tab): sits just below the crosshair instead of on top of it */
+[data-theme="arcade"] #scoreboard { top: 62%; }
+/* ... and the full results screen follows the same idea: result on the left, numbers on the right */
+[data-theme="arcade"] .results-panel { width: min(700px, 100%); }
+[data-theme="arcade"] #res-body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 28px; align-items: center; }
+[data-theme="arcade"] #res-body .res-big { grid-column: 1; grid-row: 1; }
+[data-theme="arcade"] #res-body .res-sub { grid-column: 1; grid-row: 2; }
+[data-theme="arcade"] #res-body .res-table { grid-column: 2; grid-row: 1 / span 2; margin: 0; }
+[data-theme="arcade"] #res-body .res-sub:nth-child(n+4) { grid-column: 1 / -1; grid-row: auto; }
+
+@media (max-width: 760px) {
+  [data-theme="arcade"] #scr-settings .panel.wide { display: block; }
+  [data-theme="arcade"] #scr-settings .tabs { flex-direction: row; flex-wrap: wrap; margin-bottom: 14px; }
+  [data-theme="arcade"] #match-banner { grid-template-columns: 1fr; grid-template-areas: "title" "big" "sub" "rows" "next"; }
+  [data-theme="arcade"] #res-body { grid-template-columns: 1fr; }
+  [data-theme="arcade"] #res-body .res-big, [data-theme="arcade"] #res-body .res-sub, [data-theme="arcade"] #res-body .res-table { grid-column: 1; grid-row: auto; }
+}
+
+/* ============================================================================================================
+   MAIN MENU LAYOUTS - <html data-menu="b"> Cinematic centre menu, <html data-menu="d"> Arcade lobby.
+   The same buttons, handlers and Arcade components in both; only their arrangement differs. The 3D arena behind
+   the menu is drawn by js/menubg.js; the screen background here is just a scrim over it. Layouts apply to the main
+   menu only. Below 901 px wide both fall back to one simple stacked column.
+   ============================================================================================================ */
+html[data-menu] #scr-main { padding: 0; overflow-x: hidden; }
+html[data-menu] #scr-main .menu-grid {
+  position: relative; width: 100%; min-height: 100%; margin: 0; padding: 56px clamp(14px, 3vw, 44px) 22px;
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; align-items: start;
+}
+html[data-menu] #scr-main .menu-left, html[data-menu] #scr-main .menu-right { display: contents; }
+[data-theme="arcade"] #scr-main > .layout-switch { position: absolute; top: 14px; right: 18px; z-index: 3; display: flex; align-items: center; gap: 12px; }
+.layout-switch .eyebrow { margin: 0; }
+html[data-menu] #scr-main .menu-right .keyline { margin-bottom: 8px; }
+html[data-menu] #scr-main .menu-right .weapon-strip { margin-bottom: 18px; }
+html[data-menu] #scr-main .menu-list { margin-bottom: 18px; }
+html[data-menu] #scr-main .menu-left > .menu-row { margin-bottom: 16px; }
+
+/* scrims: the arena shows through, the menu stays readable */
+html[data-menu="b"] #scr-main {
+  background:
+    radial-gradient(ellipse 72% 62% at 50% 50%, rgba(6, 9, 20, 0) 0%, rgba(6, 9, 20, .2) 58%, rgba(6, 9, 20, .74) 100%),
+    linear-gradient(180deg, rgba(6, 9, 20, .66) 0%, rgba(6, 9, 20, 0) 26%, rgba(6, 9, 20, 0) 60%, rgba(6, 9, 20, .8) 100%);
+}
+html[data-menu="d"] #scr-main {
+  background:
+    linear-gradient(90deg, rgba(6, 9, 20, .9) 0%, rgba(6, 9, 20, .55) 26%, rgba(6, 9, 20, 0) 50%, rgba(6, 9, 20, .55) 72%, rgba(6, 9, 20, .9) 100%),
+    linear-gradient(180deg, rgba(6, 9, 20, .5) 0%, rgba(6, 9, 20, 0) 20%, rgba(6, 9, 20, 0) 58%, rgba(6, 9, 20, .82) 100%);
+}
+
+@media (max-width: 900px) {
+  html[data-menu] #scr-main .menu-grid { padding-top: 62px; }
+  html[data-menu] #scr-main .menu-right .eyebrow:first-child { margin-top: 6px; }
+}
+
+@media (min-width: 901px) {
+  /* ---------------- B - Cinematic: brand and identity top-left, a slim navigation bar, then the Play hero in the middle */
+  html[data-menu="b"] #scr-main .menu-grid { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  html[data-menu="b"] #scr-main .brand { grid-column: 1; grid-row: 1; margin-bottom: 0; }
+  html[data-menu="b"] #scr-main .who { grid-column: 1; grid-row: 2; justify-self: start; margin: 16px 0 0; }
+  html[data-menu="b"] #scr-main .menu-left > .menu-row { grid-column: 2; grid-row: 2; align-self: center; justify-content: center; flex-wrap: nowrap; margin: 16px 0 0; }
+  html[data-menu="b"] #scr-main .menu-list { grid-column: 1 / -1; grid-row: 3; justify-self: center; align-self: center; width: min(900px, 100%); grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+  html[data-menu="b"] #scr-main .menu-item:first-child { grid-column: 1 / -1; min-height: 184px; padding: 22px 30px 24px; }
+  html[data-menu="b"] #scr-main .menu-item:first-child .mi-t { font-size: 54px; letter-spacing: 3px; }
+  html[data-menu="b"] #scr-main .menu-item:first-child .mi-d { font-size: 15px; }
+  html[data-menu="b"] #scr-main .foot { grid-column: 1 / -1; grid-row: 4; justify-self: center; text-align: center; max-width: 700px; margin: 0; }
+  html[data-menu="b"] #scr-main .menu-left > .eyebrow, html[data-menu="b"] #scr-main .menu-right { display: none; }
+
+  /* ---------------- D - Arcade Lobby: navigation down the left, the play panel on the right, loadout bottom-left */
+  html[data-menu="d"] #scr-main .menu-grid {
+    max-width: 1560px; margin: 0 auto; column-gap: 24px;
+    grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) minmax(380px, 460px); grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  }
+  html[data-menu="d"] #scr-main .brand { grid-column: 1; grid-row: 1; margin-bottom: 0; }
+  html[data-menu="d"] #scr-main .who { grid-column: 1; grid-row: 2; margin: 16px 0 0; }
+  html[data-menu="d"] #scr-main .menu-left > .menu-row { grid-column: 1; grid-row: 3; align-self: start; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 8px; margin: 22px 0 0; }
+  html[data-menu="d"] #scr-main .menu-left > .menu-row .chip { text-align: left; padding: 12px 16px; }
+  html[data-menu="d"] #scr-main .menu-list { grid-column: 3; grid-row: 2 / 6; align-self: center; margin: 0; gap: 10px; }
+  html[data-menu="d"] #scr-main .menu-item:first-child { min-height: 158px; }
+  html[data-menu="d"] #scr-main .menu-left > .eyebrow, html[data-menu="d"] #scr-main .menu-right .keyline, html[data-menu="d"] #scr-main .weapon-strip ~ .eyebrow { display: none; }
+  html[data-menu="d"] #scr-main .menu-right > .eyebrow:first-child { grid-column: 1 / 3; grid-row: 4; margin: 0 0 8px; }
+  html[data-menu="d"] #scr-main .weapon-strip { grid-column: 1 / 3; grid-row: 5; max-width: 780px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin: 0; }
+  html[data-menu="d"] #scr-main .foot { grid-column: 1 / 3; grid-row: 6; margin: 16px 0 0; max-width: 560px; }
+}
+
+@media (min-width: 901px) and (max-height: 700px) {
+  html[data-menu="b"] #scr-main .menu-item:first-child { min-height: 136px; padding: 16px 26px 18px; }
+  html[data-menu="b"] #scr-main .menu-item:first-child .mi-t { font-size: 42px; }
+  html[data-menu="d"] #scr-main .menu-item:first-child { min-height: 118px; }
+  html[data-menu="d"] #scr-main .menu-left > .menu-row .chip { padding: 9px 16px; }
+  html[data-menu="d"] #scr-main .menu-left > .menu-row { margin-top: 14px; }
+  html[data-menu="d"] #scr-main .who { margin-top: 12px; }
+  html[data-menu="d"] #scr-main .foot { margin-top: 10px; }
+}
