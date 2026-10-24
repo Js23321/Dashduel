@@ -1,0 +1,7 @@
+server
+docs
+_archive
+Dockerfile
+.dockerignore
+.gitignore
+*.md
