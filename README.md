@@ -85,7 +85,8 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
   Setup, trade-offs (serverless vs persistent server) and deployment steps: **[docs/ONLINE_BACKEND.md](docs/ONLINE_BACKEND.md)**.
 * **Queue:** *Online 1v1* → the queue screen (connecting / searching / matched, with connection status and a retry button
   if the server is unreachable) → when two players are searching they are matched into their own isolated room and each
-  clicks **Enter match** (the browser needs a click to lock the mouse).
+  the match **starts by itself** (no confirm screen). The browser only lets a page capture the mouse after a click, so if
+  it has not been captured yet a "Click to capture the mouse" prompt shows; one click and you are in.
 * **Rules:** first to **5 round wins**, 150 health each. Each round: both players spawn on opposite sides, a **3 second
   countdown** with movement and shooting locked, then the fight; a round ends on an elimination (or after 90 s: most
   health wins). Between rounds nobody is frozen. Maps: Toybox, Skybridge, Pinwheel, Vertigo.

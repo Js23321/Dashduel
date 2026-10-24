@@ -92,6 +92,11 @@ kbd {
 #dmgnums { position: absolute; left: 0; top: 0; }
 #nade-hold { left: 50%; top: calc(50% + 38px); width: 72px; height: 3px; transform: translateX(-50%); background: rgba(255,255,255,.2); box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
 #nade-hold i { display: block; height: 100%; width: 0; background: #fff; }
+/* shown while a match is running but the mouse is not captured yet (the match started by itself, the browser needs a click) */
+#lock-prompt { left: 50%; top: 22%; transform: translateX(-50%); padding: 10px 22px; background: var(--glass3); box-shadow: inset 0 -3px 0 var(--acc); color: var(--tx); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; font-size: calc(15px * var(--hs)); opacity: 0; pointer-events: none; white-space: nowrap; transition: opacity .15s ease; }
+#lock-prompt.on { opacity: 1; animation: lockpulse 1.2s ease-in-out infinite; }
+#lock-prompt b { color: var(--acc); }
+@keyframes lockpulse { 50% { box-shadow: inset 0 -3px 0 var(--acc), 0 0 18px var(--acc-dim); } }
 /* spawn protection: a small readout under the crosshair while you cannot be damaged (ends when you attack) */
 #hud-prot { left: 50%; top: calc(50% + 62px); transform: translateX(-50%) scale(.96); display: flex; align-items: baseline; gap: 6px; padding: 5px 14px; background: var(--glass2); box-shadow: inset 0 -2px 0 var(--hi); color: var(--hi); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: calc(12px * var(--hs)); opacity: 0; transition: opacity .15s ease, transform .15s ease; white-space: nowrap; }
 #hud-prot.on { opacity: 1; transform: translateX(-50%) scale(1); }

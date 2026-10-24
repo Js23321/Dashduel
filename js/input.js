@@ -13,6 +13,7 @@
     capture: null, // function(code) while rebinding
     canvas: null,
     onLockChange: null,
+    onUnlockedClick: null, // (event) a click while the mouse is not captured
     onBlur: null,
     onFire: null, // called synchronously on a fire press
     onWheel: null, // called with the wheel direction (-1 / +1)
@@ -171,6 +172,7 @@
         cb('Mouse' + e.button, false);
         return;
       }
+      if (input.enabled && !input.isLocked() && input.onUnlockedClick) input.onUnlockedClick(e);
       if (!input.enabled || !input.isLocked()) return;
       e.preventDefault();
       press('Mouse' + e.button, false);

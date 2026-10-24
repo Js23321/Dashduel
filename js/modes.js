@@ -66,6 +66,8 @@
     G.weapons = new RV.Loadout(G);
     G.zoom = 0;
     RV.input.onFire = G.onFirePress;
+    RV.input.onUnlockedClick = G.onUnlockedClick;
+    G.awaitLock = false;
     RV.input.onWheel = G.onWheel;
     G.modeImpl = RV.modes[mode];
     G.modeImpl.init(G);
@@ -186,9 +188,22 @@
   /** Lock changes: Esc releases the mouse -> pause; clicking Resume re-locks -> resume. */
   G.onLockChange = function (locked, error) {
     if (RV.input.noLock) return;
+    if (locked) G.awaitLock = false;
+    // an online match that started by itself (no click on "Enter match") cannot lock the mouse until the player clicks:
+    // that refusal is expected, so show "click to capture the mouse" instead of opening the pause menu
+    else if (error && G.awaitLock && G.state === 'playing' && !G.menuOpen) return;
     if (G.state === 'playing' && !G.menuOpen && (!locked || error)) G.pause();
     else if ((G.state === 'paused' || G.menuOpen) && locked && !RV.ui.settingsOpenFromPause) G.resume();
   };
+
+  /** A click while the mouse is not captured: this is the user gesture the browser wants for the pointer lock. */
+  G.onUnlockedClick = function () {
+    if (G.awaitLock && G.state === 'playing' && !G.menuOpen) RV.input.requestLock();
+  };
+  // Esc while the mouse was never captured (no pointer-lock change fires then): open the menu by hand
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' && G.awaitLock && G.state === 'playing' && !G.menuOpen && !RV.input.isLocked()) G.pause();
+  });
 
   // ---------------------------------------------------------------------------
   // Shooting + weapon switching input
@@ -519,6 +534,7 @@
     const wp = G.weapons;
     hud.setWeapon(wp.weapon, wp.ammo, wp.reloading, wp.grenades, wp.grenadeCharge(), wp.grenades < RV.WEAPON_BY_ID.grenade.maxCount ? wp.gregen : 0, wp.reserve);
     hud.setProtect(G.mode === 'online' ? RV.online.prot : Math.max(0, G.protUntil - G.time));
+    hud.setLockPrompt(G.awaitLock && G.state === 'playing' && !G.menuOpen && !RV.input.isLocked());
     hud.setWeaponBar(wp.cur, wp.grenades, wp.grenadeCharge(), wp.weapon.doubleJump ? (pl.djUsed ? 2 : 1) : 0);
     rr.vm.hidden = false;
     hud.setAdsFade(G.zoom);

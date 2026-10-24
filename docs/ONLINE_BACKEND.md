@@ -275,7 +275,7 @@ PowerShell: `$env:SERVE_STATIC='1'; node server.js`.
 **Two-client test:**
 1. Open `http://localhost:8787/` in **two browser windows** (or one normal and one private window; the session token
    lives in `sessionStorage`, so two *tabs* of one browser also work).
-2. Enter a different username in each and press **Online 1v1** in both. They are matched; press **Enter match** in each.
+2. Enter a different username in each and press **Online 1v1** in both. They are matched and the match starts by itself in both (click once in the game to capture the mouse).
 3. Check: 3-2-1 countdown with both locked in their spawns; you move instantly; the other window shows your avatar only
    when there is a line of sight; shooting shows hit markers only after the server confirms; scores and rounds stay in
    sync; first to 5 wins and the results screen offers **Rematch**.

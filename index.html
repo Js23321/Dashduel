@@ -33,6 +33,7 @@
   </div>
 
   <div id="nade-hold" class="hidden"><i></i></div>
+  <div id="lock-prompt"><b>Click</b> to capture the mouse</div>
   <div id="hud-prot"><span class="pl">Spawn protection</span><b id="prot-time">0.0</b><span class="pu">s</span></div>
 
   <div id="hud-top">
@@ -164,7 +165,7 @@
       <div id="queue-time" class="queue-time">0:00</div>
       <p class="fine">You are matched with whoever is searching at the same time, on the game server. The server runs the match: it decides hits, health, rounds and the score. To test it yourself, open the game in a second browser window or on another device and queue there too.</p>
       <div class="stack">
-        <button id="btn-queue-enter" class="btn primary hidden">Enter match</button>
+        <button id="btn-queue-enter" class="btn primary hidden">Enter match</button> <!-- (kept for markup compatibility; matches now start by themselves) -->
         <button id="btn-queue-retry" class="btn primary hidden">Try again</button>
         <button id="btn-queue-net" class="btn hidden">Server settings</button>
         <button id="btn-queue-cancel" class="btn" data-autofocus>Cancel</button>

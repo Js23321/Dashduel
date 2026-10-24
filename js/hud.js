@@ -15,7 +15,7 @@
 
   H.init = function () {
     const ids = [
-      'hud', 'hud-prot', 'prot-time', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 'speed-val', 'speed-fill', 'state-label',
+      'hud', 'hud-prot', 'prot-time', 'lock-prompt', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 'speed-val', 'speed-fill', 'state-label',
       'top-speed', 'hud-title', 'hud-timer', 'hud-sub', 'hud-split', 'hud-center', 'hud-hint', 'hud-feed', 'fps',
       'cp-marker', 'hitmarker', 'vignette', 'blast', 'dmg-layer', 'hud-practice', 'practice-stats', 'scoreboard', 'toast',
       'hud-left', 'hud-right', 'hud-top', 'hud-elim', 'duel-banner', 'tp-you', 'tp-bot', 'tp-botname', 'tp-round', 'weapon-bar', 'weapon-name',
@@ -137,6 +137,14 @@
     if (H.last.rcls !== cls) {
       H.last.rcls = cls;
       H.el['hud-right'].className = cls;
+    }
+  };
+
+  /** "Click to capture the mouse" while a match is running but the browser has not given us the mouse yet. */
+  H.setLockPrompt = function (on) {
+    if (H.last.lockp !== on) {
+      H.last.lockp = on;
+      H.el['lock-prompt'].classList.toggle('on', on);
     }
   };
 

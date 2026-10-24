@@ -248,14 +248,17 @@
     }
   };
 
-  /** Called by "Enter match": the click lets the browser lock the mouse. */
+  /** Start the match (called as soon as the server announces it; there is no confirm step). */
   O.enter = function () {
     if (!O.matched || O.started) return;
     O.started = true;
     O.leaving = false;
     O.rematchWindow = 0;
-    if (RV.settings.fullscreen) RV.enterFullscreen();
+    const gesture = !!(navigator.userActivation && navigator.userActivation.isActive); // (a click is only fresh for a few seconds)
+    if (RV.settings.fullscreen && gesture) RV.enterFullscreen();
     RV.game.start('online', O.mapId, { to: TO });
+    // started without a click: the browser may refuse the pointer lock, then "click to capture the mouse" is shown
+    RV.game.awaitLock = !RV.input.noLock;
     NC.send({ t: 'ready' });
   };
 
@@ -616,16 +619,13 @@
     O.matched = true;
     O.queueing = false;
     if (O.rematching) {
-      // a rematch: the old game is over, load a fresh one when the player clicks "Enter match"
+      // a rematch: the old game is over, a fresh one is loaded straight away
       O.rematching = false;
       O.started = false;
       O.phase = 'idle';
     }
-    if (O.ui) {
-      O.ui.onMatched(O.oppName);
-      O.ui.onReady(O.oppName);
-    }
-    if (RV.input.noLock) O.enter(); // test / development mode has no pointer lock to wait for
+    if (O.ui) O.ui.onMatched(O.oppName);
+    O.enter(); // no "Enter match" button: the match simply starts
   };
 
   /** The connection closed. During a match: hold the place and reconnect; otherwise tell the player. */
@@ -698,6 +698,7 @@
       O.leaving = false;
       if (O.ui) O.ui.onStatus('Rejoining your match…', 'resume');
       RV.game.start('online', m.map, { to: TO });
+      RV.game.awaitLock = !RV.input.noLock;
     }
     const g = G();
     if (g.mode !== 'online') return;
