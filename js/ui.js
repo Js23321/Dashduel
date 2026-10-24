@@ -538,17 +538,19 @@
   };
 
   // ---------------------------------------------------------------- online queue
-  UI.startQueue = function () {
+  /** Reset the queue screen (shared by "find a match" and "rematch") and return the callbacks the online client reports to. */
+  function queueScreen(title, retryLabel) {
     UI.show('queue');
     $('queue-me').textContent = RV.profile.get();
     $('queue-opp').textContent = '?';
-    $('queue-title').textContent = 'Finding an opponent';
+    $('queue-title').textContent = title;
     const st = $('queue-status');
     st.className = 'queue-status';
     st.textContent = 'Connecting\u2026';
     $('btn-queue-cancel').textContent = 'Cancel';
     $('btn-queue-enter').classList.add('hidden');
     $('btn-queue-retry').classList.add('hidden');
+    $('btn-queue-retry').textContent = retryLabel;
     $('btn-queue-net').classList.add('hidden');
     const t0 = Date.now();
     clearInterval(UI.queueTimer);
@@ -557,14 +559,15 @@
       $('queue-time').textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
     }, 500);
     $('queue-time').textContent = '0:00';
-    RV.online.queue({
+    const cb = {
       onStatus: (text, ph) => {
         st.className = 'queue-status';
         st.textContent = text;
         if (ph === 'searching') $('queue-opp').textContent = '?';
       },
-      onMatched: (opp, isHost) => {
+      onMatched: (opp) => {
         clearInterval(UI.queueTimer);
+        UI.rematchActive = false;
         $('queue-opp').textContent = opp;
         $('queue-title').textContent = 'Match found';
         st.textContent = 'Starting the match\u2026';
@@ -579,22 +582,65 @@
       },
       onError: (msg) => {
         clearInterval(UI.queueTimer);
+        UI.rematchActive = false;
         $('btn-queue-enter').classList.add('hidden');
         $('btn-queue-retry').classList.remove('hidden');
         $('btn-queue-net').classList.remove('hidden');
         st.className = 'queue-status err';
         st.textContent = msg;
-        $('queue-title').textContent = 'Could not queue';
+        $('queue-title').textContent = title === 'Rematch' ? 'No rematch' : 'Could not queue';
         $('btn-queue-cancel').textContent = 'Back';
       },
-    });
+      // the other player's answer to a rematch request ('left' / 'closed': no rematch will happen)
+      onRematch: (s) => {
+        if (s === 'left' || s === 'closed') cb.onError(s === 'left' ? 'Your opponent left, so there is no rematch.' : 'The rematch window closed.');
+      },
+    };
+    return cb;
+  }
+
+  UI.startQueue = function () {
+    UI.rematchActive = false;
+    RV.online.queue(queueScreen('Finding an opponent', 'Try again'));
+  };
+
+  /** From the results screen: ask the same opponent for another match (the server starts it when both agree). */
+  UI.startRematch = function () {
+    UI.rematchActive = true;
+    const cb = queueScreen('Rematch', 'Find new match');
+    $('queue-opp').textContent = RV.online.oppName;
+    RV.online.rematch(cb);
   };
 
   UI.cancelQueue = function () {
     clearInterval(UI.queueTimer);
+    if (UI.rematchActive) {
+      // waiting for a rematch: the finished game is still loaded, so leaving it closes the room for the other player too
+      UI.rematchActive = false;
+      RV.game.stop();
+      UI.show('main');
+      return;
+    }
     RV.online.cancelQueue();
     if (RV.online.matched && !RV.online.started) RV.online.leave();
     UI.show('main');
+  };
+
+  /** A rematch message arrived while the results screen is showing (the opponent asked, or left). */
+  UI.rematchMsg = function (s) {
+    if (UI.rematchActive) return;
+    const note = $('res-note'),
+      btn = $('btn-rematch');
+    if (!note || RV.game.state !== 'results') return;
+    if (s === 'opp') {
+      note.textContent = RV.online.oppName + ' wants a rematch.';
+      note.classList.remove('hidden');
+      btn.textContent = 'Accept rematch';
+    } else if (s === 'left' || s === 'closed') {
+      note.textContent = s === 'left' ? RV.online.oppName + ' left, so there is no rematch.' : 'The rematch window closed.';
+      note.classList.remove('hidden');
+      btn.classList.add('hidden');
+    }
   };
 
   // ---------------------------------------------------------------- loadout (weapon selection)
@@ -695,6 +741,10 @@
       html += '<div class="res-sub" style="margin-top:12px">Splits: ' + r.splits.map((s) => RV.fmtTime(s)).join(' · ') + '</div>';
     }
     $('res-body').innerHTML = html;
+    const rm = $('btn-rematch');
+    rm.classList.toggle('hidden', !r.rematch);
+    rm.textContent = 'Rematch';
+    $('res-note').classList.add('hidden');
     UI.show('results');
   };
 
@@ -834,6 +884,10 @@
     $('btn-res-menu').addEventListener('click', () => {
       RV.game.stop();
       UI.show('main');
+    });
+    $('btn-rematch').addEventListener('click', () => {
+      RV.audio.play('click');
+      UI.startRematch();
     });
 
     $('btn-reset-records').addEventListener('click', () => {

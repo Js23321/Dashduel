@@ -23,6 +23,22 @@
     onstatus: null, // ()
   });
   const KEY = 'dashduel.server';
+  const SKEY = 'dashduel.session'; // the session token: this tab only (sessionStorage), never sent anywhere but to the game server
+  const readTok = () => {
+    try {
+      return sessionStorage.getItem(SKEY) || '';
+    } catch (e) {
+      return '';
+    }
+  };
+  const saveTok = (t) => {
+    try {
+      if (t) sessionStorage.setItem(SKEY, t);
+      else sessionStorage.removeItem(SKEY);
+    } catch (e) {
+      /* storage blocked: the match still works, it just cannot be resumed after a reload */
+    }
+  };
 
   /** Where is the server? Returns {url, source} or {error}. */
   NC.resolveUrl = function () {
@@ -110,7 +126,7 @@
         reject(new Error(msg));
       };
       const timer = setTimeout(() => fail('The game server at ' + r.url + ' did not answer in time.'), 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 1, name }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 2, name, tok: readTok() || undefined }));
       ws.onerror = () => fail('Could not reach the game server at ' + r.url + '. Is it running?');
       ws.onclose = (e) => {
         if (!done) return fail(e.reason || 'The connection to the game server was closed (code ' + e.code + ').');
@@ -141,6 +157,8 @@
           clearTimeout(timer);
           NC.state = 'open';
           NC.id = m.id;
+          NC.resumed = !!m.resumed;
+          if (m.tok) saveTok(m.tok); // a new session: keep the token so a dropped connection can come back to this match
           NC.online = m.online || 0;
           NC.queued = m.queued || 0;
           NC.pingT = setInterval(() => NC.send({ t: 'ping', ts: performance.now() }), 2000);
@@ -149,7 +167,10 @@
           resolve(m);
           return;
         }
-        if (m.t === 'err' && !done) return fail(m.msg || 'The server refused the connection.');
+        if (m.t === 'err' && !done) {
+          if (m.code === 'replaced') return;
+          return fail(m.msg || 'The server refused the connection.');
+        }
         if (m.t === 'queued') {
           NC.online = m.online || NC.online;
           NC.queued = m.queued || 0;
@@ -159,6 +180,9 @@
       };
     });
   };
+
+  /** Forget the session (after a match is over and the player leaves for good). */
+  NC.forgetSession = () => saveTok('');
 
   NC.send = function (obj) {
     const ws = NC.ws;
@@ -217,7 +241,7 @@
       } catch (e) {
         return finish({ ok: false, error: e.message });
       }
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 1, name: 'Probe' }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 2, name: 'Probe' })); // (no token: a probe never touches a real session)
       ws.onerror = () => finish({ ok: false, error: 'Could not connect. Is the server running and the address right?' });
       ws.onclose = () => finish({ ok: false, error: 'The server closed the connection.' });
       let info = null;

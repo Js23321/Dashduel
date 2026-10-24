@@ -89,6 +89,7 @@
   });
 
   const SLIDE_STATES = { stand: 0, crouch: 1, slide: 2 };
+  const STATE_LEN = 43; // length of getState()
 
   class Player {
     constructor(world) {
@@ -785,6 +786,120 @@
       this.roll = RV.damp(this.roll, rollTarget, 9, dt);
     }
 
+    /**
+     * The complete movement state as a flat array of numbers (everything step() reads that is not an input):
+     * the server sends it to correct a client, the client restores it and replays its unacknowledged inputs.
+     * Exact doubles, so a restored player continues bit for bit like the original.
+     */
+    getState(out) {
+      const b = this.b,
+        a = out || new Array(STATE_LEN);
+      let i = 0;
+      a[i++] = b.x;
+      a[i++] = b.y;
+      a[i++] = b.z;
+      a[i++] = b.vx;
+      a[i++] = b.vy;
+      a[i++] = b.vz;
+      a[i++] = b.h;
+      a[i++] = b.grounded ? 1 : 0;
+      a[i++] = SLIDE_STATES[this.mode] || 0;
+      a[i++] = this.eyeH;
+      a[i++] = this.roll;
+      a[i++] = this.rollTarget;
+      a[i++] = this.jumpBuf;
+      a[i++] = this.coyote;
+      a[i++] = this.djUsed ? 1 : 0;
+      a[i++] = this.slideCd;
+      a[i++] = this.slideBoostCd;
+      a[i++] = this.slideTime;
+      a[i++] = this.groundTime;
+      a[i++] = this.airTime;
+      a[i++] = this.wallRunning ? 1 : 0;
+      a[i++] = this.wallKey;
+      a[i++] = this.wallN.x;
+      a[i++] = this.wallN.z;
+      a[i++] = this.wallSide;
+      a[i++] = this.wallLost;
+      a[i++] = this.wallRunTime;
+      a[i++] = this.wallStamina;
+      a[i++] = this.lastWallKey;
+      a[i++] = this.wjTimer;
+      a[i++] = this.wjKey;
+      a[i++] = this.wjNx;
+      a[i++] = this.wjNz;
+      a[i++] = this.wjRunnable ? 1 : 0;
+      a[i++] = this.padCd;
+      a[i++] = this.noSteer;
+      a[i++] = this.hopChain;
+      a[i++] = this.lastHopTime;
+      a[i++] = this.fallSpeed;
+      a[i++] = this.slopeN.x;
+      a[i++] = this.slopeN.y;
+      a[i++] = this.slopeN.z;
+      a[i++] = this.speedH;
+      return a;
+    }
+
+    /** Restore getState(). Returns false (and changes nothing) if the array is not a valid state. */
+    setState(a) {
+      if (!Array.isArray(a) || a.length !== STATE_LEN) return false;
+      for (let k = 0; k < STATE_LEN; k++) if (typeof a[k] !== 'number' || !isFinite(a[k])) return false;
+      const b = this.b;
+      let i = 0;
+      b.x = a[i++];
+      b.y = a[i++];
+      b.z = a[i++];
+      b.vx = a[i++];
+      b.vy = a[i++];
+      b.vz = a[i++];
+      b.h = a[i++];
+      b.grounded = a[i++] === 1;
+      const m = a[i++];
+      this.mode = m === 2 ? 'slide' : m === 1 ? 'crouch' : 'stand';
+      this.eyeH = a[i++];
+      this.roll = a[i++];
+      this.rollTarget = a[i++];
+      this.jumpBuf = a[i++];
+      this.coyote = a[i++];
+      this.djUsed = a[i++] === 1;
+      this.slideCd = a[i++];
+      this.slideBoostCd = a[i++];
+      this.slideTime = a[i++];
+      this.groundTime = a[i++];
+      this.airTime = a[i++];
+      this.wallRunning = a[i++] === 1;
+      this.wallKey = a[i++];
+      this.wallN.x = a[i++];
+      this.wallN.z = a[i++];
+      this.wallSide = a[i++];
+      this.wallLost = a[i++];
+      this.wallRunTime = a[i++];
+      this.wallStamina = a[i++];
+      this.lastWallKey = a[i++];
+      this.wjTimer = a[i++];
+      this.wjKey = a[i++];
+      this.wjNx = a[i++];
+      this.wjNz = a[i++];
+      this.wjRunnable = a[i++] === 1;
+      this.padCd = a[i++];
+      this.noSteer = a[i++];
+      this.hopChain = a[i++];
+      this.lastHopTime = a[i++];
+      this.fallSpeed = a[i++];
+      this.slopeN.x = a[i++];
+      this.slopeN.y = a[i++];
+      this.slopeN.z = a[i++];
+      this.speedH = a[i++];
+      b.hitX = b.hitZ = 0;
+      b.hitUp = b.landed = b.stepped = false;
+      this.prevX = b.x;
+      this.prevY = b.y;
+      this.prevZ = b.z;
+      this.jumpedThisStep = false;
+      return true;
+    }
+
     /** Interpolated eye position for rendering / shooting. */
     getEye(alpha, out) {
       const b = this.b;
@@ -813,4 +928,5 @@
   }
 
   RV.Player = Player;
+  RV.PLAYER_STATE_LEN = STATE_LEN;
 })();

@@ -1,12 +1,15 @@
 'use strict';
 /*
- * Connections, handshake, rate limiting, latency measurement and the matchmaking queue.
- * Every connected player is a Client; two queued Clients become a Room (room.js).
+ * Connections, handshake, sessions, rate limiting, latency measurement and the matchmaking queue.
+ * Every connected player is a Client bound to a Session (sessions.js); two queued Clients become a Room (room.js).
  */
 const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const CFG = require('./config');
-const S = require('./shared');
+const log = require('./log');
+const schema = require('./schema');
+const ac = require('./anticheat');
+const { Sessions } = require('./sessions');
 const { Room } = require('./room');
 
 const now = () => performance.now();
@@ -22,23 +25,13 @@ function cleanName(s) {
   return n.length >= 3 ? n : 'Player' + (100 + Math.floor(Math.random() * 900));
 }
 
-let log = () => {};
-function setLogger(level) {
-  const stamp = () => new Date().toISOString().slice(11, 19);
-  log = (lvl, ...a) => {
-    if (level === 'quiet') return;
-    if (lvl === 'debug' && level !== 'debug') return;
-    console.log(stamp(), ...a);
-  };
-}
-setLogger(CFG.LOG_LEVEL);
-
 class Client {
   constructor(conn, ip, lobby) {
     this.conn = conn;
     this.ip = ip;
     this.lobby = lobby;
-    this.id = crypto.randomBytes(4).toString('hex');
+    this.id = crypto.randomBytes(4).toString('hex'); // connection id until the handshake gives the session id
+    this.session = null;
     this.name = '';
     this.state = 'new'; // new | idle | queued | room
     this.room = null;
@@ -48,12 +41,17 @@ class Client {
     this.connectedAt = now();
     this.tokens = 120;
     this.tokenAt = now();
-    this.bad = 0;
     this.pingSent = 0;
     this.dead = false;
+    this.replaced = false;
+    this.over = 0;
 
     conn.on('message', (text) => this.onText(text));
     conn.on('close', () => lobby.onClose(this));
+  }
+
+  get sid() {
+    return this.session ? this.session.id : this.id;
   }
 
   alive() {
@@ -74,21 +72,29 @@ class Client {
   onText(text) {
     const t = now();
     this.lastSeen = t;
-    // token bucket: 120 messages of burst, 90 per second sustained (snapshots are 30 per second)
+    // token bucket: 120 messages of burst, 90 per second sustained (input batches are ~30 per second)
     this.tokens = Math.min(120, this.tokens + ((t - this.tokenAt) / 1000) * 90);
     this.tokenAt = t;
+    if (this.tokens > 60) this.over = 0;
     if (--this.tokens < 0) {
-      if (++this.bad > 60) this.kick('Too many messages');
+      // over the limit: the message is dropped; the first 60 are recorded one by one, after that every 10th (a flood is
+      // kicked quickly, but a flooding client cannot make the server spend effort on every single packet)
+      this.over++;
+      if (this.over <= 60 || this.over % 10 === 0) this.lobby.violate(this, 'rate_limit');
       return;
     }
-    let m;
+    let raw;
     try {
-      m = JSON.parse(text);
+      raw = JSON.parse(text);
     } catch (e) {
-      if (++this.bad > 20) this.kick('Invalid data');
+      this.lobby.violate(this, 'bad_message', { why: 'not json' });
       return;
     }
-    if (!m || typeof m !== 'object' || typeof m.t !== 'string') return;
+    const m = schema.parse(raw);
+    if (!m) {
+      this.lobby.violate(this, 'bad_message', { why: 'schema', type: raw && typeof raw.t === 'string' ? raw.t.slice(0, 16) : typeof raw });
+      return;
+    }
     this.lobby.onMessage(this, m);
   }
 }
@@ -98,10 +104,11 @@ class Lobby {
     this.clients = new Set();
     this.queue = [];
     this.rooms = new Set();
+    this.sessions = new Sessions();
     this.nextRoom = 1;
     this.perIp = new Map();
     this.started = Date.now();
-    this.totals = { connections: 0, matches: 0, finished: 0 };
+    this.totals = { connections: 0, matches: 0, finished: 0, kicks: 0, reconnects: 0 };
     this.lastTick = now();
     this.timer = null;
   }
@@ -131,8 +138,18 @@ class Lobby {
     this.clients.add(c);
     this.perIp.set(ip, (this.perIp.get(ip) || 0) + 1);
     this.totals.connections++;
-    log('debug', 'connect', c.id);
+    log.debug('connect', { cid: c.id });
     return c;
+  }
+
+  /** Record a rule violation for this client and act on the verdict (warn / kick). */
+  violate(c, rule, detail) {
+    const verdict = ac.record({ sid: c.sid, ip: c.ip }, rule, Object.assign({ room: c.room ? c.room.id : undefined }, detail));
+    if (verdict === 'kick') {
+      this.totals.kicks++;
+      c.kick('Disconnected: the server detected suspicious activity. You can reconnect in ' + CFG.AC.LOCKOUT_S + ' seconds.');
+    } else if (verdict === 'warn') c.send({ t: 'warn', msg: 'Unusual activity detected. Please play normally; repeated violations disconnect you.' });
+    return verdict;
   }
 
   onClose(c) {
@@ -144,8 +161,13 @@ class Lobby {
     else this.perIp.set(c.ip, n);
     const qi = this.queue.indexOf(c);
     if (qi >= 0) this.queue.splice(qi, 1);
-    if (c.room) c.room.onLeave(c, 'disconnected');
-    log('debug', 'disconnect', c.id, c.name);
+    const s = c.session;
+    if (s && s.client === c && !c.replaced) {
+      s.client = null;
+      s.expireAt = Date.now() + CFG.SESSION_IDLE_S * 1000;
+      if (s.room) s.room.onDisconnect(s);
+    }
+    log.debug('disconnect', { sid: c.sid });
   }
 
   info() {
@@ -161,13 +183,43 @@ class Lobby {
           c.conn.close(1008, 'protocol mismatch');
           return;
         }
-        c.name = cleanName(m.name);
-        c.state = 'idle';
-        c.send({ t: 'welcome', id: c.id, name: c.name, v: CFG.PROTOCOL, tick: CFG.TICK_HZ, ...this.info() });
+        let s = m.tok ? this.sessions.verify(m.tok) : null;
+        const resumed = !!s;
+        const wait = ac.lockedFor(s ? s.id : '-', c.ip);
+        if (wait) {
+          c.send({ t: 'err', code: 'locked', msg: 'You were disconnected for suspicious activity. Try again in ' + wait + ' seconds.' });
+          c.conn.close(1008, 'locked');
+          return;
+        }
+        if (s) {
+          // the same session on a new connection replaces the old one (a session is never in two places)
+          const old = s.client;
+          if (old && old !== c) {
+            old.replaced = true;
+            old.send({ t: 'err', code: 'replaced', msg: 'This session was opened in another window.' });
+            old.conn.close(1000, 'replaced');
+          }
+          this.totals.reconnects++;
+        } else {
+          s = this.sessions.create(cleanName(m.name), c.ip);
+          if (!s) {
+            c.send({ t: 'err', code: 'full', msg: 'The server is full. Try again in a minute.' });
+            c.conn.close(1013, 'full');
+            return;
+          }
+        }
+        s.client = c;
+        s.ip = c.ip;
+        c.session = s;
+        c.name = s.name;
+        c.state = s.room ? 'room' : 'idle';
+        log.info(resumed ? 'session_resume' : 'session_new', { sid: s.id, room: s.room ? s.room.id : undefined });
+        c.send({ t: 'welcome', id: s.id, name: s.name, v: CFG.PROTOCOL, tick: CFG.TICK_HZ, resumed, tok: resumed ? undefined : s.token, ...this.info() });
+        if (s.room) s.room.attach(s, c);
         return;
       }
       case 'spong':
-        if (typeof m.ts === 'number' && c.pingSent && Math.abs(m.ts - c.pingSent) < 1) {
+        if (c.pingSent && Math.abs(m.ts - c.pingSent) < 1) {
           const sample = now() - c.pingSent;
           c.rtt = c.rtt * 0.7 + Math.min(sample, 2000) * 0.3;
           c.pingSent = 0;
@@ -179,7 +231,21 @@ class Lobby {
     }
     if (c.state === 'new') return;
     switch (m.t) {
-      case 'queue':
+      case 'queue': {
+        const s = c.session;
+        const wait = ac.lockedFor(s.id, c.ip);
+        if (wait) {
+          c.send({ t: 'err', code: 'locked', msg: 'Matchmaking is locked for ' + wait + ' more seconds.' });
+          return;
+        }
+        if (s.room) {
+          // a running match is resumed, never duplicated; a finished one is left to make room for a new queue entry
+          if (s.room.phase === 'over') s.room.onLeave(c, 'left');
+          else {
+            s.room.attach(s, c);
+            return;
+          }
+        }
         if (c.state === 'idle') {
           c.state = 'queued';
           this.queue.push(c);
@@ -187,6 +253,7 @@ class Lobby {
           this.tryMatch();
         }
         return;
+      }
       case 'unqueue': {
         const i = this.queue.indexOf(c);
         if (i >= 0) this.queue.splice(i, 1);
@@ -210,12 +277,17 @@ class Lobby {
         this.queue.unshift(a);
         continue;
       }
+      if (a.session === b.session) {
+        this.queue.unshift(a); // (cannot happen: one connection per session) never match a session with itself
+        continue;
+      }
       const map = CFG.MAPS[Math.floor(Math.random() * CFG.MAPS.length)];
       const room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
       a.state = b.state = 'room';
+      a.session.room = b.session.room = room;
       this.rooms.add(room);
       this.totals.matches++;
-      log('info', 'match', room.id, map, a.name, 'vs', b.name);
+      log.info('match_start', { room: room.id, map, a: a.session.id, b: b.session.id, an: a.name, bn: b.name });
     }
   }
 
@@ -223,19 +295,32 @@ class Lobby {
     this.rooms.delete(room);
     this.totals.finished++;
     for (const p of room.p) {
-      if (!p.cl.dead && p.cl.state === 'room') p.cl.state = 'idle';
+      const s = this.sessions.map.get(p.sid);
+      if (s && s.room === room) {
+        s.room = null;
+        s.expireAt = Date.now() + CFG.SESSION_IDLE_S * 1000;
+        if (s.client && !s.client.dead && s.client.state === 'room') s.client.state = 'idle';
+      }
     }
-    log('debug', 'room closed', room.id);
+    log.debug('room_closed', { room: room.id });
   }
 
   tick() {
     const t = now();
     const dt = Math.min(0.1, (t - this.lastTick) / 1000);
     this.lastTick = t;
-    for (const r of this.rooms) r.tick(t, dt);
+    for (const r of this.rooms) {
+      try {
+        r.tick(t, dt);
+      } catch (e) {
+        // one broken room must never take the server (or the other rooms) down; clients get no internals
+        log.warn('room_error', { room: r.id, msg: String(e && e.message).slice(0, 120) });
+        r.abort('server error');
+      }
+    }
   }
 
-  /** once a second: latency pings, idle timeouts, handshake timeout, stats */
+  /** once a second: latency pings, idle timeouts, handshake timeout, session cleanup */
   housekeeping() {
     const t = now();
     for (const c of this.clients) {
@@ -252,7 +337,9 @@ class Lobby {
         c.send({ t: 'sping', ts: t });
       }
     }
+    for (const s of this.sessions.sweep()) ac.forget(s.id);
+    ac.sweep();
   }
 }
 
-module.exports = { Lobby, Client, cleanName, setLogger, log: (...a) => log(...a) };
+module.exports = { Lobby, Client, cleanName };

@@ -397,30 +397,7 @@
 
   /** Shove the player away from a blast (no damage): a grenade at your feet launches you. */
   GR.boost = function (g, gw, ex, ey, ez) {
-    const pl = g.player;
-    const b = pl.b;
-    const cx = b.x,
-      cy = b.y + b.h * 0.5,
-      cz = b.z;
-    let dx = cx - ex,
-      dy = cy - ey,
-      dz = cz - ez;
-    const dist = Math.hypot(dx, dy, dz);
-    if (dist > gw.boostRadius) return false;
-    if (!g.world.lineClear(ex, ey, ez, cx, cy, cz) && !g.world.lineClear(ex, ey, ez, cx, b.y + 0.2, cz)) return false;
-    const k = 1 - dist / gw.boostRadius;
-    const power = gw.boostPower * (0.4 + 0.6 * k);
-    const l = dist || 1;
-    dx /= l;
-    dy = dy / l + gw.boostUp;
-    dz /= l;
-    const nl = Math.hypot(dx, dy, dz) || 1;
-    if (b.vy < 0) b.vy = 0;
-    b.vx += (dx / nl) * power;
-    b.vy += (dy / nl) * power;
-    b.vz += (dz / nl) * power;
-    b.grounded = false;
-    pl.coyote = 0;
+    if (!S.boost(g.world, g.player, gw, ex, ey, ez)) return false; // the push itself is shared with the server (grensim.js)
     RV.audio.play('boost');
     RV.viewmodel.onJump();
     g.session.boosts = (g.session.boosts || 0) + 1;

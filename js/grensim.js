@@ -106,6 +106,38 @@
   };
 
   /**
+   * The push a blast gives a player standing near it (no damage): a grenade at your feet launches you. Changes the
+   * velocity of `pl` (a RV.Player) and returns true if it pushed. The browser calls this for prediction, the server
+   * for the authoritative result.
+   */
+  S.boost = function (world, pl, gw, ex, ey, ez) {
+    const b = pl.b;
+    const cx = b.x,
+      cy = b.y + b.h * 0.5,
+      cz = b.z;
+    let dx = cx - ex,
+      dy = cy - ey,
+      dz = cz - ez;
+    const dist = Math.hypot(dx, dy, dz);
+    if (dist > gw.boostRadius) return false;
+    if (!world.lineClear(ex, ey, ez, cx, cy, cz) && !world.lineClear(ex, ey, ez, cx, b.y + 0.2, cz)) return false;
+    const k = 1 - dist / gw.boostRadius;
+    const power = gw.boostPower * (0.4 + 0.6 * k);
+    const l = dist || 1;
+    dx /= l;
+    dy = dy / l + gw.boostUp;
+    dz /= l;
+    const nl = Math.hypot(dx, dy, dz) || 1;
+    if (b.vy < 0) b.vy = 0;
+    b.vx += (dx / nl) * power;
+    b.vy += (dy / nl) * power;
+    b.vz += (dz / nl) * power;
+    b.grounded = false;
+    pl.coyote = 0;
+    return true;
+  };
+
+  /**
    * Damage a blast at (ex,ey,ez) does to a body standing at (tx,ty,tz) with height th: gw.dmg scaled by
    * how much of the body the blast can see (0, 1/3, 2/3 or all of it; walls and cover block it).
    */

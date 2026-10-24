@@ -11,10 +11,13 @@
  */
 const http = require('http');
 const fs = require('fs');
+const crypto = require('crypto');
 const path = require('path');
 const CFG = require('./config');
 const { upgrade } = require('./websocket');
-const { Lobby, log } = require('./lobby');
+const { Lobby } = require('./lobby');
+const log = require('./log');
+const ac = require('./anticheat');
 
 const ROOT = path.join(__dirname, '..');
 const MIME = {
@@ -54,6 +57,33 @@ function clientIp(req) {
   return req.socket.remoteAddress || 'unknown';
 }
 
+/** TLS terminated here, or by a trusted proxy that says so. */
+function isSecure(req) {
+  if (req.socket.encrypted) return true;
+  return CFG.TRUST_PROXY && String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+}
+
+/**
+ * The development-only inspection endpoints answer only when DEBUG_ENDPOINTS=1, and then only to a request that
+ * carries ADMIN_TOKEN as a bearer token (constant-time compare) or, when no token is configured, comes from this machine.
+ * They contain rule counts, short session ids and recent security events: no tokens, no addresses.
+ */
+function debugAllowed(req) {
+  if (!CFG.DEBUG_ENDPOINTS) return false;
+  if (CFG.ADMIN_TOKEN) {
+    const h = String(req.headers.authorization || '');
+    const given = Buffer.from(h.startsWith('Bearer ') ? h.slice(7) : '');
+    const want = Buffer.from(CFG.ADMIN_TOKEN);
+    return given.length === want.length && crypto.timingSafeEqual(given, want);
+  }
+  const a = req.socket.remoteAddress || '';
+  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+}
+
+function roomSummaries(lobby) {
+  return [...lobby.rooms].map((r) => ({ id: r.id, map: r.mapId, phase: r.phase, round: r.round, score: r.score, players: r.p.map((p) => ({ sid: p.sid.slice(0, 6), alive: p.alive, away: p.away, hp: p.hp, queued: p.qSteps, simSteps: p.seqDone, violations: p.tele.violations, corrections: p.tele.fixes })) }));
+}
+
 function createServer() {
   const lobby = new Lobby();
   const server = http.createServer((req, res) => {
@@ -61,6 +91,17 @@ function createServer() {
     if (url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({ ok: true, protocol: CFG.PROTOCOL, uptime: Math.round(process.uptime()), ...lobby.info(), totals: lobby.totals }));
+      return;
+    }
+    if (url === '/debug/anticheat' || url === '/debug/rooms') {
+      if (!debugAllowed(req)) {
+        res.writeHead(404);
+        res.end('Not found');
+        return;
+      }
+      const body = url === '/debug/anticheat' ? { anticheat: ac.snapshot(), events: log.recent(100), logCounters: log.counters() } : { rooms: roomSummaries(lobby), sessions: lobby.sessions.size, totals: lobby.totals };
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(body, null, 1));
       return;
     }
     if (CFG.SERVE_STATIC && (req.method === 'GET' || req.method === 'HEAD') && STATIC_OK.test(url)) {
@@ -89,6 +130,11 @@ function createServer() {
       return;
     }
     const ip = clientIp(req);
+    if (CFG.REQUIRE_TLS && !isSecure(req)) {
+      socket.write('HTTP/1.1 426 Upgrade Required\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     if (!lobby.admit(ip)) {
       socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
       socket.destroy();
@@ -110,11 +156,11 @@ if (require.main === module) {
   const { server, lobby } = createServer();
   lobby.start();
   server.listen(CFG.PORT, CFG.HOST, () => {
-    log('info', 'DASHDUEL server listening on ' + CFG.HOST + ':' + CFG.PORT + (CFG.SERVE_STATIC ? '  (also serving the game files)' : ''));
-    log('info', 'allowed origins: ' + (CFG.ALLOWED_ORIGINS.length ? CFG.ALLOWED_ORIGINS.join(', ') : 'localhost / file:// only (set ALLOWED_ORIGINS for production)'));
+    log.info('listening', { host: CFG.HOST, port: CFG.PORT, static: CFG.SERVE_STATIC, protocol: CFG.PROTOCOL, tls_required: CFG.REQUIRE_TLS, origins: CFG.ALLOWED_ORIGINS.length ? CFG.ALLOWED_ORIGINS : 'localhost / file:// only (set ALLOWED_ORIGINS for production)' });
+    if (CFG.TEST_MODE) log.warn('config', { note: 'TEST_MODE is ON (test-only teleport message enabled). Never use it on a public server.' });
   });
   const shutdown = () => {
-    log('info', 'shutting down');
+    log.info('shutdown', {});
     lobby.stop();
     server.close();
     if (server.closeAllConnections) server.closeAllConnections();

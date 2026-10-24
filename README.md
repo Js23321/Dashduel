@@ -89,17 +89,25 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
 * **Rules:** first to **5 round wins**, 150 health each. Each round: both players spawn on opposite sides, a **3 second
   countdown** with movement and shooting locked, then the fight; a round ends on an elimination (or after 90 s: most
   health wins). Between rounds nobody is frozen. Maps: Toybox, Skybridge, Pinwheel, Vertigo.
-* **Who decides what:** your browser simulates and sends *its own movement* (30 snapshots a second) and *requests*
-  ("fire in this direction", "reload", "throw"). The **server** validates movement (teleports, speed, walls → snap-back),
-  decides every hit with lag compensation, and owns health, ammo, deaths, rounds, score, respawns, the countdown and
-  grenade flight. Hit markers, damage numbers and your health change only when the server says so. The opponent is drawn
-  from 30 Hz server snapshots, interpolated.
+* **Who decides what:** your browser sends *input* (keys + view angles, numbered) and *requests* ("fire", "reload",
+  "throw": no direction, no damage). The **server** simulates your movement with the same physics, so your position is
+  whatever the rules allow for that input; your browser predicts it locally so it feels instant, and the server corrects
+  it (with a replay of the input it has not simulated yet) if the two ever differ. The server decides every hit
+  (with lag compensation capped at 350 ms) and owns health, ammo, deaths, rounds, score, the countdown and grenade
+  flight. Hit markers, damage numbers and your health change only when the server says so. The opponent is drawn from
+  30 Hz server snapshots, interpolated, and **is not sent to you at all while they are behind a wall**.
 * **Connection status:** top-left of the HUD shows `Connected · <ms> · <n> online`; *Settings → Network* shows the server
   in use and has a **Test connection** button. You cannot pause an online match (the menu opens over the live match);
-  *Leave match* forfeits. If the opponent leaves or drops, you win; if you lose the connection, the match ends.
-* **Honest limits:** needs the server and an internet connection (or a LAN for local tests); no accounts or ranking; no
-  reconnection (a dropped player forfeits); server-side checks stop teleports, speed hacks and wall clipping, but not an
-  aimbot or reading opponent positions (see the docs).
+  *Leave match* forfeits. If the opponent leaves they forfeit. **If your connection drops** the game reconnects by
+  itself (15 s grace; the opponent is told) and resumes the same round. When a match ends both players can press
+  **Rematch**.
+* **Anti-cheat (server side):** per-session violation score with decay (warn at 40, disconnect at 100 with a 60 s
+  lockout, never permanent), speed-hack limit on input rate, view-turn limit, weapon timing in simulation time, strict
+  message validation and rate limits, origin allow-list, TLS enforcement, structured security logs. Rules and limits in
+  [docs/ONLINE_BACKEND.md](docs/ONLINE_BACKEND.md).
+* **Honest limits:** needs the server and an internet connection (or a LAN for local tests); no accounts or ranking;
+  server-side checks stop teleports, speed hacks, wall clipping, fire-rate hacks and wallhacks, but an aimbot that stays
+  inside the rules cannot be detected by any server (the docs say what is logged for a human to review).
 
 ## Weapons — exactly four (keys 1–4, mouse wheel, `F` = previous weapon)
 
@@ -250,7 +258,8 @@ js/stats.js          records / personal bests
 js/maps.js           map definitions
 js/collision.js      collision world (AABB + ramp wedges, spatial grid, raycasts)
 js/grensim.js        grenade physics + blast damage (shared with the server)
-js/player.js         movement physics (fixed 120 Hz step) incl. the fists-only double jump
+js/player.js         movement physics (fixed 120 Hz step) incl. the fists-only double jump (also run by the server)
+js/netproto.js       the wire format both sides must agree on (input runs, flags)
 js/input.js          keyboard / mouse / wheel / pointer lock / rebinding / focus safety
 js/audio.js          WebAudio synth (compressor + reverb, no audio files)
 js/vmanim.js         first-person weapon + hands animation maths (pure, no THREE)
@@ -264,23 +273,25 @@ js/grenades.js       thrown grenades: aiming preview, flight, blast, boost
 js/bots.js           navigation graph + AI opponents
 js/modes.js          session loop, Duel / Deathmatch / Time Trial / Practice
 js/netclient.js      the one persistent WebSocket to the game server (handshake, heartbeat, latency, test)
-js/online.js         Online 1v1 client: draws what the server says, sends movement + requests
+js/online.js         Online 1v1 client: input stream, prediction + reconciliation, interpolation, reconnect, rematch
 js/ui.js             menus, loadout, settings, records, keyboard navigation
 js/main.js           boot, main loop, frame-time governor
-server/              the authoritative game server (Node.js, no dependencies) + tests: see server/README.md
-docs/ONLINE_BACKEND.md   backend choice, architecture, configuration, deployment
+server/              the authoritative game server (Node.js, no dependencies) + 75 tests + .env.example: see server/README.md
+docs/ONLINE_BACKEND.md   backend choice, architecture, anti-cheat rules, configuration, deployment, limitations
 Dockerfile           container image for the server (Fly.io etc.)
 _archive/            retired code (the old peer-to-peer transport, the Tactical theme and its switcher)
 ```
 
 ## Testing
 ```bash
-cd server && node --test         # server tests (matchmaking, combat, validation, abuse, WebSocket layer)
+cd server && node --test         # 75 server tests (~100 s): movement prediction == simulation, combat, anti-cheat rules,
+                                 # sessions / reconnect / rematch, information protection, lobby, WebSocket layer, load
 ```
-The browser side was verified with headless Chrome against the real server: two clients queueing and playing a match,
-both main menu layouts at many window sizes, switching layouts repeatedly and from the pause menu in the middle of a match, keyboard / weapon switching / firing after a
-switch, the connection-failure screens and *Test connection*. Pointer lock and fullscreen need a real window, so
-check those by hand: start a match, press `Esc` (mouse released), *Resume*, then pause menu → *Fullscreen*.
+The browser side was verified with headless Chrome against the real server: two real browsers queueing, playing a full
+5-round match (countdown lock, prediction with zero corrections, hidden opponent, server-confirmed hits, a dropped and
+resumed connection, rematch, forfeit), both main menu layouts at many window sizes, switching layouts in the middle of a
+match, and the connection-failure screens. Pointer lock and fullscreen need a real window, so check those by hand:
+start a match, press `Esc` (mouse released), *Resume*, then pause menu → *Fullscreen*.
 
 ## Performance design
 * Each map is merged into one mesh per material, characters and weapons are merged too, and decals / particles are

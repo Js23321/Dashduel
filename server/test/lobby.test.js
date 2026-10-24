@@ -1,7 +1,8 @@
 'use strict';
+process.env.TEST_MODE = '1'; // (the debug message lets a test read the server's own position)
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { startServer, TestClient, sleep, CFG, S, RV } = require('./helpers');
+const { startServer, TestClient, dbg, sleep, CFG, S, RV } = require('./helpers');
 const { originAllowed } = require('../server');
 const { cleanName } = require('../lobby');
 
@@ -144,11 +145,14 @@ test('rooms are isolated: two simultaneous matches never see each other', async 
   await Promise.all(cs.map((c) => c.wait('round')));
   for (const c of cs) {
     const snap = await c.wait('snap');
-    assert.ok(snap.o, 'every player receives its own opponent');
+    assert.ok(snap.o, 'every player receives a snapshot about its own room');
+    assert.strictEqual(snap.rn, 1);
   }
-  // the opponent in a snapshot is always the player in the same room (distinct positions per room are checked by spawn index)
-  const r0 = await cs[0].wait('snap'), r1 = await cs[1].wait('snap');
-  assert.notDeepStrictEqual([r0.o.x, r0.o.z], [r1.o.x, r1.o.z]);
+  // a shot fired in room 1 is heard only in room 1
+  cs[2].clear();
+  cs[3].clear();
+  await sleep(100);
+  assert.strictEqual(cs[2].all('fx').length + cs[3].all('fx').length, 0, 'nothing from the other room arrives');
   for (const c of cs) c.close();
   await sleep(200);
 });
@@ -168,17 +172,16 @@ test('round start: separate spawns, a real 3 second locked countdown, then live'
   assert.strictEqual(ra.n, 1);
   assert.strictEqual(ra.cd, 3);
   assert.notStrictEqual(ra.you, ra.opp, 'players spawn on different spawn points');
-  assert.strictEqual(ra.you, rb.opp);
-  assert.strictEqual(ra.opp, rb.you);
+  assert.notStrictEqual(ra.you, rb.you, 'each player has their own spawn');
+  assert.strictEqual(ra.opp, undefined, 'the opponent spawn is not disclosed');
   const map = RV.maps[ma.map];
   const spA = map.spawns[ra.you];
-  // movement during the countdown is ignored: the snapshots keep showing the spawn
-  a.send({ t: 'st', x: spA.x + 5, y: spA.y, z: spA.z, yw: 0, pt: 0, sp: 3, gr: 1, m: 0, w: 0 });
+  // input during the countdown is ignored: the player stays in the spawn
+  a.send({ t: 'in', rn: ra.n, q: 0, r: [[20, 1, 0, 8, 0, 0, 0]] });
   await sleep(300);
-  const snapB = b.last('snap');
-  const spB = map.spawns[rb.opp];
-  assert.ok(Math.hypot(snapB.o.x - spB.x, snapB.o.z - spB.z) < 0.01, 'a countdown move must not be applied');
-  assert.strictEqual(snapB.ph, 1, 'phase is countdown');
+  const da = await dbg(a);
+  assert.ok(Math.hypot(da.x - spA.x, da.z - spA.z) < 0.01 && da.a === 0, 'a countdown move must not be applied');
+  assert.strictEqual(b.last('snap').ph, 1, 'phase is countdown');
   const live = await a.wait('live', null, 6000);
   const dt = live._at - t0;
   assert.ok(dt > 2800 && dt < 3600, 'countdown lasts about 3 s, was ' + dt);
