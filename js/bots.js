@@ -375,8 +375,12 @@
     }
 
     /** Returns true when this hit killed the bot. */
+    isProtected(g) {
+      return (this.protUntil || 0) > g.time;
+    }
+
     damage(amount, g, w) {
-      if (!this.alive) return false;
+      if (!this.alive || this.isProtected(g)) return false;
       RV.takeDamage(this, amount);
       this.flash = 0.07;
       if (this.hp <= 0) {
@@ -667,8 +671,9 @@
         m.bodyMat.emissive.setHex(0xffffff);
         m.headMat.emissive.setHex(0xffffff);
       } else {
-        m.bodyMat.emissive.setHex(0x000000);
-        m.headMat.emissive.setHex(0x000000);
+        const pc = this.isProtected(g) ? 0x0c4f6e : 0x000000; // a protected bot glows faintly teal
+        m.bodyMat.emissive.setHex(pc);
+        m.headMat.emissive.setHex(pc);
       }
       const hpf = (this.hp + this.armor) / (BOT.HP + RV.ARMOR.START);
       m.fill.scale.x = Math.max(0.001, 0.9 * hpf);
@@ -682,6 +687,7 @@
     }
 
     _swing(g) {
+      this.protUntil = 0; // attacking ends spawn protection
       const b = this.body,
         pb = g.player.b;
       const dist = Math.hypot(pb.x - b.x, pb.y + 0.9 - (b.y + 0.9), pb.z - b.z);
@@ -690,6 +696,7 @@
     }
 
     _shoot(g, ex, ey, ez) {
+      this.protUntil = 0; // attacking ends spawn protection
       const w = this.weapon;
       const cp = Math.cos(this.aimPitch);
       const dx = -Math.sin(this.aimYaw) * cp,

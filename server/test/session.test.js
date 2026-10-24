@@ -148,7 +148,7 @@ test('a player who is away cannot be hurt, and is hurt again after returning', a
     await sleep(200);
     shoot(sb);
     const hit = await m.b.wait('hit', null, 2000);
-    assert.strictEqual(hit.dmg, 25, 'after returning A can be hit again');
+    assert.strictEqual(hit.dmg, 12, 'after returning A can be hit again');
     a2.close();
     m.b.close();
   } finally {

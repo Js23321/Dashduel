@@ -25,6 +25,7 @@
  *   ADMIN_TOKEN       if set, the debug endpoints need "Authorization: Bearer <token>"; if empty they answer only
  *                     requests from the local machine
  *   LOG_LEVEL / LOG_FORMAT   "info"|"debug"|"quiet"  /  "json" (default) | "text"
+ *   SPAWN_PROTECT_S   seconds of spawn protection when a round goes live (default 2, 0 = off)
  * Anti-cheat thresholds (all optional, see docs/ONLINE_BACKEND.md): AC_WARN_SCORE, AC_KICK_SCORE, AC_DECAY,
  *   AC_LOCKOUT_S, AC_MAX_TURN_RATE, AC_CLAIM_EPS, AC_INPUT_QUEUE_MAX, AC_INPUT_BURST_STEPS, LAG_MAX_REWIND_MS, ...
  *   TEST_MODE         "1" = tests only: allows the test-only teleport message. Never enable on a public server.
@@ -61,6 +62,7 @@ module.exports = {
   TO: 5, // rounds to win a match
   COUNTDOWN: 3, // seconds locked in the spawn at the start of every round
   ROUND_TIME: 90, // seconds per round (then most health wins)
+  SPAWN_PROTECT_S: num(env.SPAWN_PROTECT_S, 2), // a player who has just gone live takes no damage for this long, or until they attack (0 = off)
   LOADING_TIMEOUT: 25, // seconds both players get to load the map
   ENDED_PAUSE: 1.9, // seconds between a round ending and the next countdown
   OVER_PAUSE: 1.6, // seconds between the last round ending and the match-end screen

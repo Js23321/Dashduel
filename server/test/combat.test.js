@@ -17,18 +17,18 @@ test.after(async () => {
   await srv.stop();
 });
 
-test('a body shot is decided by the server: 25 damage, health, confirmation and shot effect', async () => {
+test('a body shot is decided by the server: 12 damage (the RIVALS rifle), health, confirmation and shot effect', async () => {
   const m = await liveMatch(srv, ['ShA', 'ShB']);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair);
   shoot(sa);
   const hurt = await m.b.wait('hurt');
   const hit = await m.a.wait('hit');
-  assert.strictEqual(hurt.dmg, 25);
-  assert.strictEqual(hurt.hp, 125);
+  assert.strictEqual(hurt.dmg, 12);
+  assert.strictEqual(hurt.hp, 138);
   assert.strictEqual(hurt.h, 0);
   assert.strictEqual(hurt.src, 'rifle');
-  assert.strictEqual(hit.dmg, 25);
+  assert.strictEqual(hit.dmg, 12);
   assert.strictEqual(hit.head, false);
   assert.strictEqual(hit.kill, false);
   const fx = await m.b.wait('fx');
@@ -36,18 +36,18 @@ test('a body shot is decided by the server: 25 damage, health, confirmation and 
   assert.strictEqual(fx.w, 'rifle');
   assert.ok(Array.isArray(fx.o), 'the shooter is in plain sight, so the effect carries its position');
   await sleep(120);
-  assert.strictEqual(m.b.last('snap').hp, 125, 'the authoritative health is in the snapshot');
+  assert.strictEqual(m.b.last('snap').hp, 138, 'the authoritative health is in the snapshot');
   m.a.close();
   m.b.close();
 });
 
-test('a headshot does 1.5x (38)', async () => {
+test('a headshot does 1.25x (15)', async () => {
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair, { dy: 1.75 });
   shoot(sa);
   const hurt = await m.b.wait('hurt');
-  assert.strictEqual(hurt.dmg, 38);
+  assert.strictEqual(hurt.dmg, 15);
   assert.strictEqual(hurt.h, 1);
   assert.strictEqual((await m.a.wait('hit')).head, true);
   m.a.close();
@@ -76,14 +76,16 @@ test('ammo is tracked on the server and a reload refills it', async () => {
   sa.step(1, { pitch: 1.4 }); // look at the sky so nothing is hit
   for (let i = 0; i < 5; i++) shoot(sa);
   await sleep(900);
-  assert.strictEqual(m.a.last('snap').am, 25);
+  assert.strictEqual(m.a.last('snap').am, 15, 'a 20 round magazine, 5 fired');
+  assert.strictEqual(m.a.last('snap').rs, 100, 'and 100 spare rounds');
   sa.act('reload');
-  sa.step(200, {}); // 1.67 s of simulation: the reload (1.5 s) completes
+  sa.step(200, {}); // 1.67 s of simulation: the reload (1.56 s) completes
   sa.flush();
   await sleep(2200);
-  assert.strictEqual(m.a.last('snap').am, 30, 'ammo is back to a full magazine after the reload time');
-  // an empty magazine cannot shoot: burn 30 rounds, then aim at the enemy: the 31st does nothing
-  for (let i = 0; i < 30; i++) shoot(sa, 12);
+  assert.strictEqual(m.a.last('snap').am, 20, 'ammo is back to a full magazine after the reload time');
+  assert.strictEqual(m.a.last('snap').rs, 95, 'and only the 5 missing rounds came out of the spare rounds');
+  // an empty magazine cannot shoot: burn 20 rounds, then aim at the enemy: the 21st does nothing
+  for (let i = 0; i < 20; i++) shoot(sa, 12);
   sa.flush();
   await sleep(3500);
   assert.strictEqual(m.a.last('snap').am, 0, 'the magazine is empty');
@@ -131,7 +133,7 @@ test('the weapon must match what the server says is in hand: grenade out = no ri
   m.b.close();
 });
 
-test('fists: 32 damage up close, nothing from far away', async () => {
+test('fists: 30 damage up close, nothing from far away', async () => {
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   let sa = await stage(m, m.ra, pair, { slotA: 2 });
@@ -144,7 +146,7 @@ test('fists: 32 damage up close, nothing from far away', async () => {
   sa.step(60, {});
   sa.act('punch');
   const hurt = await m.b.wait('hurt', null, 3000);
-  assert.strictEqual(hurt.dmg, 32);
+  assert.strictEqual(hurt.dmg, 30);
   assert.strictEqual(hurt.src, 'fists');
   m.a.close();
   m.b.close();
@@ -179,7 +181,7 @@ test('lag compensation: the shot is checked against where the shooter saw the ta
   await sleep(20);
   shoot(sa, 1);
   const hurt = await m.b.wait('hurt', null, 1500);
-  assert.strictEqual(hurt.dmg, 25, 'a shot at the position the shooter saw must hit');
+  assert.strictEqual(hurt.dmg, 12, 'a shot at the position the shooter saw must hit');
   // 400 ms later B has been standing at the new spot for much longer than the rewind cap: aiming at the old spot misses
   await sleep(500);
   m.b.clear();
@@ -254,7 +256,7 @@ test('killing the opponent ends the round on both sides and starts the next coun
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair);
-  for (let i = 0; i < 6; i++) shoot(sa);
+  for (let i = 0; i < 13; i++) shoot(sa); // 150 health / 12 damage
   const ea = await m.a.wait('roundEnd', null, 4000),
     eb = await m.b.wait('roundEnd', null, 4000);
   assert.strictEqual(ea.w, 'you');
@@ -280,7 +282,7 @@ test('first to 5 wins the match; both players may agree to a rematch', async () 
   for (let n = 1; n <= 5; n++) {
     const pair = openPair(m.map, 8);
     const sa = await stage(m, round, pair);
-    for (let i = 0; i < 6; i++) shoot(sa);
+    for (let i = 0; i < 13; i++) shoot(sa); // 150 health / 12 damage
     const e = await m.a.wait('roundEnd', null, 5000);
     assert.strictEqual(e.n, n);
     assert.deepStrictEqual(e.sc, [n, 0]);

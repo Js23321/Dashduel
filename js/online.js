@@ -50,6 +50,7 @@
     rematchWindow: 0,
     oppAway: false,
     oppAlive: true,
+    prot: 0, // seconds of spawn protection I have left (the server decides; this only drives the HUD)
     mapId: null,
     ui: null,
     // input stream (prediction / reconciliation)
@@ -82,6 +83,7 @@
       this.armor = 0;
       this.alive = false; // alive AND currently replicated (visible); the real state is O.oppAlive
       this.hidden = true;
+      this.prot = false;
       this.kills = 0;
       this.deaths = 0;
       this.weaponId = 'rifle';
@@ -116,6 +118,7 @@
       }
       if (this.hidden) this.buf.length = 0; // coming back into view: the old samples are stale
       this.hidden = false;
+      this.prot = !!o.pr;
       this.alive = !!o.al && O.phase !== 'wait';
       this.buf.push({ t: performance.now(), x: num(o.x), y: num(o.y), z: num(o.z), yaw: num(o.yw), pitch: num(o.pt), sp: num(o.sp), gr: o.gr ? 1 : 0, m: num(o.m), w: clamp(Math.round(num(o.w)), 0, 3) });
       if (this.buf.length > 40) this.buf.shift();
@@ -181,8 +184,9 @@
         m.bodyMat.emissive.setHex(0xffffff);
         m.headMat.emissive.setHex(0xffffff);
       } else {
-        m.bodyMat.emissive.setHex(0x000000);
-        m.headMat.emissive.setHex(0x000000);
+        const pc = this.prot ? 0x0c4f6e : 0x000000; // the opponent glows faintly teal while spawn-protected
+        m.bodyMat.emissive.setHex(pc);
+        m.headMat.emissive.setHex(pc);
       }
       const e = g.eye;
       this.dist = Math.hypot(s.x - e.x, s.y - e.y, s.z - e.z);
@@ -385,6 +389,7 @@
       O.sz *= k;
       if (Math.abs(O.sx) + Math.abs(O.sy) + Math.abs(O.sz) < 0.001) O.sx = O.sy = O.sz = 0;
     }
+    if (O.prot > 0) O.prot = Math.max(0, O.prot - dt);
     O.netHudAcc += dt;
     if (O.netHudAcc >= 1) {
       O.netHudAcc = 0;
@@ -554,6 +559,12 @@
       case 'hit':
         if (online) O.onHit(m);
         break;
+      case 'blk':
+        if (online && performance.now() - (O.blkAt || 0) > 400) {
+          O.blkAt = performance.now();
+          RV.hud.toast('Spawn protected', 500);
+        }
+        break;
       case 'fx':
         if (online) O.onFx(m);
         break;
@@ -700,6 +711,7 @@
     O.roundT = num(m.rt, 90);
     O.lastCount = 99;
     O.oppAway = false;
+    O.prot = num(m.pr, 0);
     O.resetStream();
     O.seq = O.sent = m.ack | 0;
     O.fixApplied = m.fx | 0;
@@ -715,7 +727,10 @@
     const slot = clamp(m.slot | 0, 0, 3);
     if (slot !== w.cur) w.select(slot);
     w.slots[2].ammo = RV.WEAPONS[2].mag;
-    if (w.weapon.kind === 'gun') w.ammo = clamp(m.am | 0, 0, w.weapon.mag);
+    if (w.weapon.kind === 'gun') {
+      w.ammo = clamp(m.am | 0, 0, w.weapon.mag);
+      if (typeof m.rs === 'number') w.reserve = clamp(m.rs | 0, 0, w.weapon.reserve || 0);
+    }
     w.grenades = clamp(m.gr | 0, 0, 1);
     O.remote.reset();
     RV.hud.centerHide();
@@ -759,6 +774,7 @@
     g.acc = 0;
     O.resetStream();
     O.oppAlive = true;
+    O.prot = 0;
     O.remote.reset(); // where the opponent stands is not told to anyone until they can actually be seen
     RV.hud.centerHide();
     RV.hud.hint('Round ' + O.round + ' · ' + O.oppName);
@@ -780,6 +796,7 @@
     const g = G();
     if (m.rn !== O.round) return;
     if (typeof m.a === 'number') O.ack(m.a);
+    O.prot = typeof m.pr === 'number' ? Math.max(0, m.pr) : 0;
     if (m.ph === 2 && O.phase === 'countdown') O.goLive();
     if (typeof m.rt === 'number' && !O.oppAway) O.roundT = m.rt;
     if (Array.isArray(m.sc) && O.phase !== 'ended') O.score = { you: m.sc[0] | 0, opp: m.sc[1] | 0 };

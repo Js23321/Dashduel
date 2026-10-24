@@ -8,6 +8,7 @@ const RV = S.RV;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function startServer() {
+  CFG.SPAWN_PROTECT_S = 0; // the staged fights in the tests start right after 'live'; the protection tests turn it on themselves
   const { server, lobby } = createServer();
   lobby.start();
   await new Promise((r) => server.listen(0, '127.0.0.1', r));

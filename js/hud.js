@@ -15,7 +15,7 @@
 
   H.init = function () {
     const ids = [
-      'hud', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 'speed-val', 'speed-fill', 'state-label',
+      'hud', 'hud-prot', 'prot-time', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 'speed-val', 'speed-fill', 'state-label',
       'top-speed', 'hud-title', 'hud-timer', 'hud-sub', 'hud-split', 'hud-center', 'hud-hint', 'hud-feed', 'fps',
       'cp-marker', 'hitmarker', 'vignette', 'blast', 'dmg-layer', 'hud-practice', 'practice-stats', 'scoreboard', 'toast',
       'hud-left', 'hud-right', 'hud-top', 'hud-elim', 'duel-banner', 'tp-you', 'tp-bot', 'tp-botname', 'tp-round', 'weapon-bar', 'weapon-name',
@@ -103,14 +103,15 @@
    * Current weapon + ammunition. Guns show rounds; fists show the double-jump state in the
    * label line; grenades show the stock and a restock / cooldown line.
    */
-  H.setWeapon = function (w, ammo, reloading, grenades, gcharge, cooldownSec) {
+  H.setWeapon = function (w, ammo, reloading, grenades, gcharge, cooldownSec, reserve) {
     setText('wname', H.el['weapon-name'], w.name);
     let val, max, label, labelOn;
     if (w.kind === 'gun') {
       val = String(ammo);
-      max = '/ ' + w.mag;
-      label = reloading ? 'RELOADING' : '';
-      labelOn = reloading;
+      max = '/ ' + (reserve == null ? w.mag : reserve); // rounds left in the magazine / spare rounds
+      const dry = ammo <= 0 && reserve <= 0;
+      label = reloading ? 'RELOADING' : dry ? 'NO AMMO' : '';
+      labelOn = reloading || dry;
     } else if (w.kind === 'melee') {
       val = '—';
       max = '';
@@ -131,12 +132,22 @@
       H.el['reload-label'].classList.toggle('on', labelOn);
     }
     const low = w.kind === 'gun' && ammo > 0 && ammo <= w.mag * 0.25;
-    const empty = (w.kind === 'gun' && ammo <= 0) || (w.kind === 'grenade' && grenades <= 0);
+    const empty = (w.kind === 'gun' && ammo <= 0 && !reloading) || (w.kind === 'grenade' && grenades <= 0);
     const cls = (low ? 'low ' : '') + (empty ? 'empty' : '');
     if (H.last.rcls !== cls) {
       H.last.rcls = cls;
       H.el['hud-right'].className = cls;
     }
+  };
+
+  /** Spawn protection indicator under the crosshair: seconds left, hidden at 0. */
+  H.setProtect = function (sec) {
+    const on = sec > 0.05;
+    if (H.last.prot !== on) {
+      H.last.prot = on;
+      H.el['hud-prot'].classList.toggle('on', on);
+    }
+    if (on) setText('prot', H.el['prot-time'], sec.toFixed(1));
   };
 
   /** Highlight the selected slot; grenade stock + restock fill; double-jump pips on the fists slot. */

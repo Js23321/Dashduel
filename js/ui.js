@@ -646,9 +646,9 @@
   // ---------------------------------------------------------------- loadout (weapon selection)
   /** Relative bar lengths 0..1 for: damage, fire rate, magazine, range. */
   const BARS = {
-    rifle: [0.34, 1.0, 0.85, 0.95],
-    pistol: [0.44, 0.58, 0.36, 0.6],
-    fists: [0.44, 0.3, 1.0, 0.1],
+    rifle: [0.2, 1.0, 0.8, 0.95],
+    pistol: [0.2, 0.72, 0.5, 0.6],
+    fists: [0.5, 0.36, 1.0, 0.1],
     grenade: [1.0, 0.12, 0.2, 0.42],
   };
   const BAR_LABELS = ['Damage', 'Rate', 'Mag', 'Range'];

@@ -90,6 +90,8 @@ function makePlayer(client, seat, world) {
     lastFixAt: 0,
     // weapons (times in simulation seconds)
     ammo: WEAPONS.map((w) => w.mag),
+    reserve: WEAPONS.map((w) => w.reserve || 0), // spare rounds per slot
+    protUntil: 0, // spawn protection: no damage until this wall-clock time (ms), or until the player attacks
     reload: null,
     lastFireSim: -9,
     lastPunchSim: -9,
@@ -318,7 +320,10 @@ class Room {
     p.seqDone++;
     const b = pl.b;
     if (p.reload && p.seqDone * STEP >= p.reload.doneSim) {
-      p.ammo[p.reload.slot] = WEAPONS[p.reload.slot].mag;
+      const rs = p.reload.slot;
+      const take = Math.min(WEAPONS[rs].mag - p.ammo[rs], p.reserve[rs]);
+      p.ammo[rs] += take;
+      p.reserve[rs] -= take;
       p.reload = null;
     }
     if (b.y < this.world.killY && this.phase === 'live') this.damage(p, 9999, null, { src: 'fall', from: b });
@@ -447,9 +452,9 @@ class Room {
 
   startReload(p, simT, report) {
     const w = WEAPONS[p.slot];
-    if (w.kind !== 'gun' || p.reload || p.ammo[p.slot] >= w.mag || simT < p.switchUntilSim) {
+    if (w.kind !== 'gun' || p.reload || p.ammo[p.slot] >= w.mag || simT < p.switchUntilSim || p.reserve[p.slot] <= 0) {
       if (report && (w.kind !== 'gun' || (!p.reload && p.ammo[p.slot] >= w.mag))) this.violate(p, 'reload_invalid', {});
-      return;
+      return; // (no spare rounds left: nothing to reload, not a violation)
     }
     p.reload = { slot: p.slot, doneSim: simT + w.reload };
   }
@@ -477,6 +482,7 @@ class Room {
       p.tele.nInt++;
     }
     p.lastFireSim = simT;
+    p.protUntil = 0; // attacking ends spawn protection
     p.ammo[p.slot]--;
     p.tele.shots++;
     if (p.ammo[p.slot] <= 0) this.startReload(p, simT, false);
@@ -517,6 +523,7 @@ class Room {
       return;
     }
     p.lastPunchSim = simT;
+    p.protUntil = 0;
     p.tele.shots++;
     const d = this.aimOf(p, this.fwd);
     const o = this.eye(p);
@@ -542,6 +549,7 @@ class Room {
       this.violate(p, 'nade_rate', { why: 'too fast' });
       return;
     }
+    p.protUntil = 0;
     const d = this.aimOf(p, this.fwd);
     const b = p.pl.b;
     const L = RV.grensim.launch(this.world, this.eye(p), d, { vx: b.vx, vy: b.vy, vz: b.vz }, GW, {}, {});
@@ -568,6 +576,7 @@ class Room {
       return;
     }
     p.grenades--;
+    p.protUntil = 0;
     p.nadeAt = t + GW.regen * 1000;
     p.pinSim = -1;
     const b = p.pl.b;
@@ -602,6 +611,11 @@ class Room {
   // ---------------------------------------------------------------------------
   damage(victim, dmg, attacker, info) {
     if (!victim.alive || this.phase !== 'live' || dmg <= 0 || victim.away) return;
+    if (info.src !== 'fall' && victim.protUntil > now()) {
+      // spawn protection: the shot is absorbed (the void still kills)
+      if (attacker) attacker.cl.send({ t: 'blk' });
+      return;
+    }
     victim.hp = Math.max(0, victim.hp - dmg);
     const kill = victim.hp <= 0;
     if (kill) victim.alive = false;
@@ -612,6 +626,11 @@ class Room {
       attacker.cl.send({ t: 'hit', dmg, head: !!info.head, kill, src: info.src });
     }
     if (kill) this.checkRound();
+  }
+
+  /** Seconds of spawn protection left for a player (0 = none). */
+  protLeft(p, t) {
+    return p.protUntil > t ? Math.round(((p.protUntil - t) / 1000) * 10) / 10 : 0;
   }
 
   checkRound() {
@@ -672,6 +691,8 @@ class Room {
       p.claims.length = 0;
       p.needFix = false;
       p.ammo = WEAPONS.map((w) => w.mag);
+      p.reserve = WEAPONS.map((w) => w.reserve || 0);
+      p.protUntil = 0;
       p.reload = null;
       p.lastFireSim = -9;
       p.lastPunchSim = -9;
@@ -695,6 +716,7 @@ class Room {
       p.budgetT = t;
       p.allowBase = p.recvSeq;
       p.allowT0 = t;
+      p.protUntil = CFG.SPAWN_PROTECT_S > 0 ? t + CFG.SPAWN_PROTECT_S * 1000 : 0;
     }
     this.broadcast(() => ({ t: 'live' }));
   }
@@ -848,6 +870,8 @@ class Room {
       you: p.spawn,
       hp: p.hp,
       am: p.ammo[p.slot],
+      rs: p.reserve[p.slot],
+      pr: this.protLeft(p, t),
       gr: p.grenades,
       slot: p.slot,
       alive: p.alive ? 1 : 0,
@@ -1046,11 +1070,13 @@ class Room {
         gr: p.grenades,
         gc: p.grenades > 0 ? 0 : Math.max(0, Math.round((p.nadeAt - t) / 100) / 10),
         am: p.ammo[p.slot],
+        rs: p.reserve[p.slot],
+        pr: this.protLeft(p, t),
         a: p.seqDone,
       };
       if (q.alive && !q.away && this.visible(p, q, t)) {
         const b = q.pl.b;
-        m.o = { x: r3(b.x), y: r3(b.y), z: r3(b.z), yw: r3(q.pl.yaw), pt: r3(q.pl.pitch), sp: r3(q.pl.speedH), gr: b.grounded ? 1 : 0, m: modeId(q.pl), w: q.slot, al: 1 };
+        m.o = { x: r3(b.x), y: r3(b.y), z: r3(b.z), yw: r3(q.pl.yaw), pt: r3(q.pl.pitch), sp: r3(q.pl.speedH), gr: b.grounded ? 1 : 0, m: modeId(q.pl), w: q.slot, al: 1, pr: this.protLeft(q, t) > 0 ? 1 : 0 };
       } else m.o = { hid: 1, al: q.alive ? 1 : 0 };
       p.cl.send(m);
     }

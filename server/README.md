@@ -8,7 +8,7 @@ Full design, anti-cheat rules, deployment steps and limitations: **[../docs/ONLI
 
 ```bash
 SERVE_STATIC=1 node server.js     # game + socket on http://localhost:8787 (open it in two windows to test)
-node --test                       # 75 automated tests (start the real server in-process), ~100 s
+npm test                          # 79 automated tests (start the real server in-process; serial, ~5 min)
 ```
 Production settings are environment variables; see **[.env.example](.env.example)** (nothing in it is a real secret).
 Run **one** instance: rooms live in this process's memory.

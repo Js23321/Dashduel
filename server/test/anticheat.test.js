@@ -67,10 +67,10 @@ test('extra fields on a valid request are discarded: damage is always what the s
   // a fire request that also "claims" a kill, 999 damage, a target and a score
   m.a.send({ t: 'act', rn: sa.round, q: sa.sent, a: 'fire', s: 0, dmg: 999, damage: 999, kill: true, target: 'opp', victim: 1, hp: 0, score: [5, 0], seat: 1, id: 'x', ammo: 999 });
   const hurt = await m.b.wait('hurt', null, 2000);
-  assert.strictEqual(hurt.dmg, 25, 'the damage is the rifle damage, whatever the client wrote');
-  assert.strictEqual(hurt.hp, 125);
+  assert.strictEqual(hurt.dmg, 12, 'the damage is the rifle damage, whatever the client wrote');
+  assert.strictEqual(hurt.hp, 138);
   await sleep(150);
-  assert.strictEqual(m.a.last('snap').am, 29, 'one round used; the claimed ammo is ignored');
+  assert.strictEqual(m.a.last('snap').am, 19, 'one round used; the claimed ammo is ignored');
   assert.deepStrictEqual(m.a.last('snap').sc, [0, 0]);
   m.a.close();
   m.b.close();
@@ -80,7 +80,7 @@ test('a dead player cannot shoot, and trying is recorded', async () => {
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair);
-  for (let i = 0; i < 6; i++) shoot(sa);
+  for (let i = 0; i < 13; i++) shoot(sa);
   await m.b.wait('roundEnd', null, 4000);
   m.a.clear();
   const dead0 = seen('fire_dead');
@@ -102,7 +102,7 @@ test('invalid ammunition and reloads: an empty magazine does not shoot, a full o
   sa.act('reload'); // magazine is full
   await sleep(300);
   assert.ok(seen('reload_invalid') > r0, 'a pointless reload is recorded');
-  assert.strictEqual(m.a.last('snap').am, 30);
+  assert.strictEqual(m.a.last('snap').am, 20);
   // fists / grenade have no magazine at all
   sa.step(1, { slot: 2 });
   sa.act('reload');
@@ -208,7 +208,7 @@ test('match telemetry is logged at the end of a match and flags are advisory (ru
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair);
-  for (let i = 0; i < 6; i++) shoot(sa);
+  for (let i = 0; i < 13; i++) shoot(sa);
   await m.a.wait('roundEnd', null, 4000);
   m.a.send({ t: 'leave' });
   await sleep(300);

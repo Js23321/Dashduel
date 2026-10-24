@@ -229,6 +229,7 @@
 [data-theme="arcade"] .dnum.head { font-size: 22px; }
 [data-theme="arcade"] .dnum.kill { font-size: 22px; }
 [data-theme="arcade"] .dnum.head.kill { font-size: 26px; }
+[data-theme="arcade"] #hud-prot { clip-path: var(--clip-s); }
 [data-theme="arcade"] #nade-hold { height: 5px; width: 90px; clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%); box-shadow: none; background: rgba(255,255,255,.18); }
 [data-theme="arcade"] #nade-hold i { background: var(--amber); }
 [data-theme="arcade"] #nade-hold.closing i { background: var(--red); }

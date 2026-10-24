@@ -95,6 +95,7 @@
     G.killedBy = null;
     RV.grenades.clear();
     G.lastDamageT = -99;
+    G.protUntil = 0;
     G.acc = 0;
     G.hist.length = 0;
     G.fovBoost = 0;
@@ -273,6 +274,7 @@
   /** cause: 'grenade' for the player's own blast; bot = the attacker (null for the void / own grenade). */
   G.hurtPlayer = function (dmg, sx, sz, bot, cause) {
     if (G.playerDead || !G.modeImpl.pvp || G.state !== 'playing') return;
+    if (cause !== 'void' && G.time < G.protUntil) return; // spawn protection (falling out of the map still kills)
     RV.takeDamage(G, dmg);
     G.lastDamageT = G.time;
     RV.hud.damageFlash();
@@ -316,6 +318,12 @@
     return best;
   };
 
+  /** Spawn protection for the player (bot = null) or a bot: no damage for RV.SPAWN_PROTECT_S, until they attack. */
+  G.protect = function (bot) {
+    if (bot) bot.protUntil = G.time + RV.SPAWN_PROTECT_S;
+    else G.protUntil = G.time + RV.SPAWN_PROTECT_S;
+  };
+
   G.respawnBot = function (bot) {
     const avoid = [{ x: G.player.b.x, y: G.player.b.y, z: G.player.b.z }];
     for (const o of G.bots) if (o !== bot && o.alive) avoid.push(o.body);
@@ -326,6 +334,7 @@
     const s = G.pickSpawn(avoid);
     bot.setWeapon(G.pickBotWeapon(bot.weaponId));
     bot.spawn(s.x, s.y, s.z, s.yaw);
+    if (G.modeImpl.pvp) G.protect(bot);
   };
 
   G.sampleHistory = function (t) {
@@ -508,7 +517,8 @@
     hud.setSpeed(speed, pl.maxSpeed, pl.stateLabel);
     hud.setVitals(G.hp);
     const wp = G.weapons;
-    hud.setWeapon(wp.weapon, wp.ammo, wp.reloading, wp.grenades, wp.grenadeCharge(), wp.grenades < RV.WEAPON_BY_ID.grenade.maxCount ? wp.gregen : 0);
+    hud.setWeapon(wp.weapon, wp.ammo, wp.reloading, wp.grenades, wp.grenadeCharge(), wp.grenades < RV.WEAPON_BY_ID.grenade.maxCount ? wp.gregen : 0, wp.reserve);
+    hud.setProtect(G.mode === 'online' ? RV.online.prot : Math.max(0, G.protUntil - G.time));
     hud.setWeaponBar(wp.cur, wp.grenades, wp.grenadeCharge(), wp.weapon.doubleJump ? (pl.djUsed ? 2 : 1) : 0);
     rr.vm.hidden = false;
     hud.setAdsFade(G.zoom);
@@ -734,7 +744,7 @@
     fixedStep(g, dt) {
       if (g.player.b.y < g.map.killY && !g.playerDead) {
         g.hp = 1;
-        g.hurtPlayer(10, g.player.b.x, g.player.b.z, null);
+        g.hurtPlayer(10, g.player.b.x, g.player.b.z, null, 'void');
       }
     },
     onPlayerDeath(g, bot) {
@@ -752,6 +762,8 @@
         this.countdown -= dt;
         if (this.countdown <= 0) {
           g.player.frozen = false;
+          g.protect(null);
+          for (const b of g.bots) g.protect(b);
           RV.audio.play('go');
           RV.hud.center('FIGHT', '#f87171', true, 700);
         }
@@ -786,6 +798,7 @@
           g.playerDead = false;
           this.deathShown = false;
           g.weapons.refill();
+          g.protect(null);
           RV.audio.play('respawn');
           RV.hud.centerHide();
         } else if (!this.deathShown) {
@@ -1036,7 +1049,7 @@
       RV.hud.setTitle('Duel · ' + g.map.name + ' · ' + (g.opts.diff || RV.settings.difficulty));
     },
     fixedStep(g, dt) {
-      if (this.phase === 'live' && g.player.b.y < g.map.killY && !g.playerDead) g.hurtPlayer(999, g.player.b.x, g.player.b.z, null);
+      if (this.phase === 'live' && g.player.b.y < g.map.killY && !g.playerDead) g.hurtPlayer(999, g.player.b.x, g.player.b.z, null, 'void');
     },
     onPlayerDeath(g, bot) {
       if (this.phase === 'live') this.endRound(g, 'bot');
@@ -1070,6 +1083,8 @@
         if (this.phaseT <= 0) {
           this.phase = 'live';
           g.player.frozen = false;
+          g.protect(null);
+          g.protect(g.bots[0]);
           RV.audio.play('go');
           RV.hud.center('FIGHT', '#ffd23f', true, 650);
         }

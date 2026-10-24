@@ -20,7 +20,7 @@ where the server is with one setting. Practice, Duel, Deathmatch and Time Trial 
 | 120 Hz physics + 30 Hz snapshots + grenade/round timers | No process to run a tick | Yes | Yes (`setInterval` tick, movement stepped at 120 Hz) |
 | Runs the **same** physics as the browser | Would have to ship the game files into the function runtime | Needs a TypeScript/bundler pipeline to share `js/player.js` (classic scripts, not modules) | **Loads `js/{util,collision,maps,player,weapondata,grensim,netproto}.js` unchanged**, so prediction and the authority cannot drift apart |
 | Build step / dependencies | Cloud-specific tooling | npm, TypeScript, schema classes | None. `node server/server.js` |
-| Already tested | n/a | Rewrite + re-test | 75 automated tests + real-browser end-to-end runs |
+| Already tested | n/a | Rewrite + re-test | 79 automated tests + real-browser end-to-end runs |
 
 I chose the plain server because the central requirement (client prediction that is **bit-exact** with the server
 simulation) is easiest to guarantee when both sides run literally the same file. Colyseus would be a reasonable choice
@@ -150,7 +150,14 @@ produce, teleports, noclip, flying, a double jump without Fists, a jump rate fas
   (1.5 s kept). A high-ping player cannot rewind further than 350 ms.
 * Validation before the shot happens: weapon is a gun, equipped (switch time respected), not reloading, ammo > 0,
   interval ≥ 90 % of the weapon's (frame granularity), alive, round live. Violations are scored (below), not trusted.
-* Headshot = ray height in the top 0.3 m of the target's body box; damage from the shared `RV.damageAt` table.
+* Headshot = ray height in the top 0.3 m of the target's body box; damage = the shared `RV.damageAt` table (distance
+  falloff) × the crit multiplier. The weapon numbers are the RIVALS ones (rifle 12 → 3, handgun 12 → 3, 0.10 / 0.13 s,
+  20 / 100 and 13 / 91 rounds, fists 30 / 0.35 s, grenade 75): see `js/weapondata.js`, which the server loads unchanged.
+* **Ammo** is tracked per weapon slot on the server (magazine + spare rounds). A reload moves only the missing rounds out of
+  the spare ones (sim-time duration); with no spare rounds it does nothing. Refilled every round.
+* **Spawn protection:** when a round goes `live` each player gets `SPAWN_PROTECT_S` (default 2 s) with no damage taken; it
+  ends at once when that player fires, punches or throws, and never stops void deaths. A shot absorbed by it sends the
+  shooter a `blk` message (no hit marker); snapshots carry `pr` (seconds left, own) and `o.pr` (opponent flag, for the glow).
 * Grenades: pin → throw requires a pin, the hold time and the cooldown; the server launches the projectile with the
   thrower's velocity and simulates it; "self-detonation" requires the full hold time.
 
@@ -280,7 +287,7 @@ PowerShell: `$env:SERVE_STATIC='1'; node server.js`.
 ### Automated tests
 ```bash
 cd server
-node --test                             # 75 tests, ~100 s
+npm test                                # 79 tests, serial, ~5 min (timing-based: close other heavy programs while it runs)
 ```
 | File | Tests | Covers |
 |---|---|---|
@@ -288,6 +295,7 @@ node --test                             # 75 tests, ~100 s
 | `movement.test.js` | 12 | prediction == simulation bit-for-bit for walking/sprint/slide/hop/air-strafe/wall-run/double-jump, corrections, teleport / speed-hack / lump-after-stall / flooding / replay / aim-rate |
 | `combat.test.js` | 15 | server-side hits and headshots, lag compensation bounds, ammo/reload/cooldowns, melee, grenades, dead players, cheating clients' extra fields |
 | `anticheat.test.js` | 21 | every rule: weights, decay, warn, kick, lockout, severe-event kick, schema rejection, rate limiting, telemetry, redaction |
+| `protection.test.js` | 4 | spawn protection: no damage while protected, shooter told, attacking ends it, the void still kills, per round |
 | `session.test.js` | 12 | tokens, resume, replacement, reconnect grace and forfeit, rematch, room cleanup, information protection, misbehaving client mid-match |
 | `load.test.js` | 1 | 16 simultaneous matches with real input |
 
@@ -295,7 +303,7 @@ They start the real server in-process and drive it with real WebSocket clients, 
 runs the game's physics exactly like the browser. A few TEST_MODE-only messages (teleport, state dump) let the tests
 stage fights; `TEST_MODE` must never be set on a public server.
 
-**Browser-level end-to-end** (two real headless Chrome instances against the real server, 48 checks): queue and match
+**Browser-level end-to-end** (two real headless Chrome instances against the real server, 58 checks, run with `SPAWN_PROTECT_S=14` so protection can be exercised): queue and match
 by the server; countdown lock with held keys; opponent hidden at round start and no coordinates in hidden snapshots;
 movement prediction with **0 corrections** over a sprint; input acknowledgements; teleport correction; server-confirmed
 hits and server-owned health (a client setting its own health to 1 is overwritten); round and match win through
@@ -329,6 +337,7 @@ browser) → `SERVER_URL` → `SAME_ORIGIN_SERVER` (the host that served the pag
 | `SESSION_SECRET` | random per start | ≥ 32 random characters; set it in production |
 | `DEBUG_ENDPOINTS` / `ADMIN_TOKEN` | off / empty | Inspection endpoints (section 6) |
 | `SERVE_STATIC` | off | also serve `index.html`, `css/`, `js/`, `vendor/` |
+| `SPAWN_PROTECT_S` | `2` | seconds of damage immunity when a round goes live (0 = off) |
 | `MAX_CONNECTIONS` / `MAX_PER_IP` | `400` / `6` | Connection limits |
 | `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | Logging |
 | `RECONNECT_GRACE_S`, `REMATCH_WINDOW_S`, `AC_*`, `LAG_MAX_REWIND_MS` | see `.env.example` | Thresholds |

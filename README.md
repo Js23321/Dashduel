@@ -111,21 +111,34 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
 
 ## Weapons — exactly four (keys 1–4, mouse wheel, `F` = previous weapon)
 
-| Slot | Weapon | Role | Damage | Rate | Mag |
-|------|--------|------|--------|------|-----|
-| 1 | **Assault Rifle** | full-auto hitscan | 25 (38 headshot) | 10/s | 30 |
-| 2 | **Handgun** | semi-auto hitscan, hits hard | 32 (48 headshot) | click | 12 |
-| 3 | **Fists** | melee, 2.4 m reach. **Unlocks the double jump** | 32 | 2.5/s | ∞ |
-| 4 | **Grenade** | hold to aim, release to throw, or let the circle reach you to boost | 75 blast | 30 s cooldown | 1 |
+The numbers follow **Roblox RIVALS** (community wiki / weapon database, checked October 2026; RIVALS is patched often, so
+treat them as "as of then"). Everything is in one table, `js/weapondata.js`, shared with the server.
 
-Switching, reloading, aiming and firing never slow your movement. There are no other weapons anywhere (no hotkeys, menus
-or hidden slots).
+| Slot | Weapon | Role | Damage | Rate | Ammo |
+|------|--------|------|--------|------|------|
+| 1 | **Assault Rifle** | full-auto hitscan | 12 up close, falling to 3 at range (headshot 15 → 4) | 0.10 s between shots | 20 in the magazine / 100 spare, reload 1.56 s |
+| 2 | **Handgun** | semi-auto hitscan | 12 → 3 (headshot 15 → 4) | 0.13 s between shots | 13 / 91 spare, reload 1.06 s |
+| 3 | **Fists** | melee, 2.4 m reach. **Unlocks the double jump** | 30 | 0.35 s | ∞ |
+| 4 | **Grenade** | hold to aim, release to throw, or let the circle reach you to boost | 75 blast | 30 s cooldown, 2 s fuse | 1 |
+
+Notes on the conversion: RIVALS measures distance in studs; here one stud is 0.36 m (RIVALS' avatar is ~5.2 studs tall, this
+one is 1.85 m), so the rifle's 50 → 200 stud falloff is **18 → 71 m** and the grenade's 16 stud blast is ~6 m. **Health is
+still 150** (RIVALS uses 100: set `RV.MAX_HP = 100` in `js/weapondata.js` for its exact time-to-kill). RIVALS' per-weapon
+move-speed changes are **not** copied: weapons never slow your movement here, by design. Spare rounds are refilled every
+round / respawn; Practice has unlimited ammunition. With no rounds left the HUD says NO AMMO.
+
+### Spawn protection
+A player who has just spawned (a duel or online round that has just gone **FIGHT**, a deathmatch respawn) takes **no damage
+for 2 seconds, or until they attack** (fire, punch or throw), whichever comes first. A readout under the crosshair counts it
+down; a protected opponent glows faintly teal; shots at them are absorbed (no hit marker, a short "Spawn protected" note).
+Falling out of the map still kills. Online it is enforced by the server (`SPAWN_PROTECT_S`, default 2, 0 = off); against bots
+it is `RV.SPAWN_PROTECT_S` in `js/weapondata.js`. The countdown at the start of a round is still locked as before.
 
 ### Guns
 * **Hitscan.** The instant you click, a ray is cast from the camera through the exact centre of the screen — a click is
   resolved inside the mouse-down event itself, with the pose that is on screen. Walls block it; opponents are tested
   against their *current* hitboxes in that same moment. Animations, hands and sounds are cosmetic and never change a hit.
-* **Headshots:** a hit on the head deals ×1.5 damage. **Damage numbers** pop up beside the crosshair: **white for a body
+* **Headshots:** a hit on the head deals ×1.25 damage (RIVALS' crit: 12 → 15). **Damage numbers** pop up beside the crosshair: **white for a body
   shot, red for a headshot** (kills are drawn a little larger).
 * Tracers, sparks, muzzle flash and shell casings are created *after* the hit is resolved. Right mouse aims down sights
   (hold, or toggle in settings) with the sight exactly on the shooting ray.
@@ -276,7 +289,7 @@ js/netclient.js      the one persistent WebSocket to the game server (handshake,
 js/online.js         Online 1v1 client: input stream, prediction + reconciliation, interpolation, reconnect, rematch
 js/ui.js             menus, loadout, settings, records, keyboard navigation
 js/main.js           boot, main loop, frame-time governor
-server/              the authoritative game server (Node.js, no dependencies) + 75 tests + .env.example: see server/README.md
+server/              the authoritative game server (Node.js, no dependencies) + 79 tests + .env.example: see server/README.md
 docs/ONLINE_BACKEND.md   backend choice, architecture, anti-cheat rules, configuration, deployment, limitations
 Dockerfile           container image for the server (Fly.io etc.)
 _archive/            retired code (the old peer-to-peer transport, the Tactical theme and its switcher)
@@ -284,7 +297,7 @@ _archive/            retired code (the old peer-to-peer transport, the Tactical 
 
 ## Testing
 ```bash
-cd server && node --test         # 75 server tests (~100 s): movement prediction == simulation, combat, anti-cheat rules,
+cd server && npm test            # 79 server tests (serial, ~5 min): movement prediction == simulation, combat, anti-cheat rules,
                                  # sessions / reconnect / rematch, information protection, lobby, WebSocket layer, load
 ```
 The browser side was verified with headless Chrome against the real server: two real browsers queueing, playing a full

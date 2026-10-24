@@ -31,12 +31,15 @@
       this.g = game;
       this._rh = { t: 0, nx: 0, ny: 0, nz: 0, solid: null };
       this._muzzle = new THREE.Vector3();
-      this.slots = WEAPONS.map((w) => ({ w, ammo: w.mag }));
+      this.slots = WEAPONS.map((w) => ({ w, ammo: w.mag, reserve: w.reserve || 0 }));
       this.reset();
     }
 
     reset() {
-      for (const s of this.slots) s.ammo = s.w.mag;
+      for (const s of this.slots) {
+        s.ammo = s.w.mag;
+        s.reserve = s.w.reserve || 0;
+      }
       this.cur = RV.clamp(Math.round(RV.settings.startWeapon || 0), 0, WEAPONS.length - 1);
       this.last = this.cur === 0 ? 1 : 0;
       this.reloading = false;
@@ -75,9 +78,19 @@
     get mag() {
       return this.weapon.mag;
     }
+    /** Spare rounds for the weapon in hand (Practice has unlimited ammunition). */
+    get reserve() {
+      return this.slots[this.cur].reserve;
+    }
+    set reserve(v) {
+      this.slots[this.cur].reserve = v;
+    }
 
     refill() {
-      for (const s of this.slots) s.ammo = s.w.mag;
+      for (const s of this.slots) {
+        s.ammo = s.w.mag;
+        s.reserve = s.w.reserve || 0;
+      }
       this.reloading = false;
       this.grenades = BY_ID.grenade.maxCount;
       this.gregen = BY_ID.grenade.regen;
@@ -127,7 +140,7 @@
 
     startReload() {
       const w = this.weapon;
-      if (w.kind !== 'gun' || this.reloading || this.ammo >= w.mag || this.switchT > 0) return;
+      if (w.kind !== 'gun' || this.reloading || this.ammo >= w.mag || this.switchT > 0 || this.reserve <= 0) return;
       this.reloading = true;
       this.reloadT = w.reload;
       RV.audio.play('reload', w.id);
@@ -206,7 +219,9 @@
         this.reloadT -= dt;
         if (this.reloadT <= 0) {
           this.reloading = false;
-          this.ammo = w.mag;
+          const take = Math.min(w.mag - this.ammo, this.reserve);
+          this.ammo += take;
+          if (this.g.mode !== 'practice') this.reserve -= take;
           RV.audio.play('reloadDone', w.id);
         }
       }
@@ -222,6 +237,7 @@
             RV.audio.play('empty');
             this.startReload();
             this.fireBuf = 0;
+            this.cd = Math.max(this.cd, 0.3); // (no clicking every frame while out of ammunition)
             break;
           }
           this._shoot(ctx);
@@ -310,6 +326,7 @@
 
     /** The circle reached you: the grenade goes off at your feet (boost, 75 to enemies, nothing to you). */
     _selfDetonate() {
+      this.g.protUntil = 0; // attacking ends spawn protection
       const gw = BY_ID.grenade;
       const T = RV.vmanim.THROW;
       this.thrown = true;
@@ -324,6 +341,7 @@
     }
 
     _release(ctx) {
+      this.g.protUntil = 0; // attacking ends spawn protection
       const gw = BY_ID.grenade;
       this.thrown = true;
       this.grenades--;
@@ -337,6 +355,7 @@
 
     // ---------------------------------------------------------------- fists
     _punch(ctx) {
+      this.g.protUntil = 0; // attacking ends spawn protection
       const g = this.g;
       const w = this.weapon;
       const o = ctx.eye,
@@ -369,6 +388,10 @@
         RV.audio.play('punchHit');
         RV.fx.impact(bb.x - d.x * 0.3, o.y + d.y * tBot, bb.z - d.z * 0.3, -d.x, 0.3, -d.z, 'flesh');
         RV.fx.punch(o.x + d.x * Math.min(tBot, w.range - 0.4), o.y + d.y * Math.min(tBot, w.range - 0.4), o.z + d.z * Math.min(tBot, w.range - 0.4));
+      } else if (hitBot && hitBot.isProtected(g)) {
+        landed = true; // the punch connects but the spawn protection absorbs it
+        RV.audio.play('punchHit');
+        RV.hud.toast('Spawn protected', 500);
       } else if (hitBot) {
         landed = true;
         this.hits++;
@@ -391,6 +414,7 @@
     // ---------------------------------------------------------------- guns
     /** Resolve one shot completely, right now. */
     _shoot(ctx) {
+      this.g.protUntil = 0; // attacking ends spawn protection
       const g = this.g;
       const w = this.weapon;
       const o = ctx.eye,
@@ -425,6 +449,10 @@
       if (hitBot && hitBot.net) {
         endT = tBot;
         RV.fx.impact(o.x + d.x * endT, o.y + d.y * endT, o.z + d.z * endT, -d.x, -d.y, -d.z, 'flesh');
+      } else if (hitBot && hitBot.isProtected(g)) {
+        endT = tBot; // absorbed by spawn protection: no damage, no hit marker
+        RV.fx.impact(o.x + d.x * endT, o.y + d.y * endT, o.z + d.z * endT, -d.x, -d.y, -d.z, 'wall');
+        RV.hud.toast('Spawn protected', 500);
       } else if (hitBot) {
         endT = tBot;
         this.hits++;
