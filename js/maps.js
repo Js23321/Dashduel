@@ -75,6 +75,15 @@
       platLight: [0xffffff, 0xfde2f3],
       block: [0xffb86b, 0x4cd0e1, 0xff6fa5],
     },
+    arena: {
+      floor: 0xd3d8e2,
+      ramp: 0x9db7e0,
+      ceil: 0x8c7ab8,
+      wallTop: 0x2bb3a8,
+      plat: [0xe9edf5, 0xbfcbe3, 0xdfe5f1, 0xa7bbe0],
+      platLight: [0xffffff, 0xe3ebfa],
+      block: [0x5b7fd6, 0xe9edf5, 0xff8a5b],
+    },
     mint: {
       floor: 0xcfe9de,
       ramp: 0x99e0cf,
@@ -128,6 +137,7 @@
           wall: !!o.wall,
           trim: o.trim,
           metal: !!o.metal,
+          invisible: !!o.invisible, // collision only: the picture comes from a mesh (m.mesh)
         };
         // cover blocks get crate frames / pillar bases + neon rings when drawn
         if (o.detail) s.detail = o.detail;
@@ -170,6 +180,7 @@
           bottom: o.bottom != null ? o.bottom : Math.min(yLow, yHigh),
           color: colour(o.c, 'ramp'),
           trim: o.trim,
+          invisible: !!o.invisible,
         };
         m.solids.push(s);
         return s;
@@ -215,6 +226,7 @@
     meadow: { hill: 0x4f9a56, top: 0x3f9bff, bottom: 0xd4f0ff, fog: 0xd4f0ff, fogNear: 90, fogFar: 480, hemi: [0xffffff, 0x9ec27a, 2.1], sun: [0xfff6e0, 1.68] },
     toy: { hill: 0x6aa7d8, top: 0x62c0ff, bottom: 0xfff2cc, fog: 0xfff2cc, fogNear: 70, fogFar: 300, hemi: [0xffffff, 0xc9d3ea, 2.1], sun: [0xfff0d0, 1.6] },
     candy: { hill: 0xb06ad0, top: 0x8b5cf6, bottom: 0xffc2e0, fog: 0xffd6ea, fogNear: 70, fogFar: 300, hemi: [0xfff0f8, 0xc4a7e8, 2.02], sun: [0xffe0f0, 1.6] },
+    arena: { hill: 0x7f93c4, top: 0x5aa8ff, bottom: 0xe6f1ff, fog: 0xe6f1ff, fogNear: 80, fogFar: 360, hemi: [0xffffff, 0xc3cde6, 2.1], sun: [0xfff6e6, 1.62] },
     mint: { hill: 0x3fb596, top: 0x38bdf8, bottom: 0xe0f7fa, fog: 0xe0f7fa, fogNear: 70, fogFar: 300, hemi: [0xffffff, 0xa7d8c9, 2.1], sun: [0xf0fff8, 1.6] },
   };
 
@@ -788,15 +800,129 @@
     return m;
   }
 
+  // ===========================================================================
+  // TEST ARENA - the CC0 "Rivals Arena Map" 3D-print model (_models/rivals-arena-map.stl), exactly: the picture is the
+  // model's own 358 triangles (js/mesh-testarena.js, made by tools/make-testarena.js), all one grey. The collision
+  // below is the same shapes as invisible boxes / ramps, with the same transform, so you stand where you see:
+  //   x = (X - 8) * 0.12,  y = (Z - 20) * 0.12,  z = -(Y - -26) * 0.12      (model units -> metres, floor at 0)
+  // It is built from: a floor and a 100-unit-high perimeter wall; a central roof on four pillars (open passages
+  // through it in both directions); four tall solid bars; two steep ramps up to 85; two arches against the side walls
+  // and two turned arches (each a base slab, a top slab and two end piers around a 35-unit-wide opening).
+  // The turned arches are not axis-aligned, so their collision is a fine staircase of boxes (2 model units a step).
+  // ===========================================================================
+  function testArena() {
+    const b = Builder('testarena', 'Test Arena', 'arena');
+    const m = b.m;
+    m.desc = 'The exact "Rivals Arena Map" 3D model (CC0), all in grey: a walled arena with a central roof on four pillars, four tall bars, two steep ramps up to high ledges and four arches you can run through.';
+    m.modes = ['duel', 'arena', 'practice'];
+    m.size = 'Compact';
+    m.sky = SKY.arena;
+    m.killY = -30;
+    m.mesh = 'testarena';
+    m.navStep = 1.5; // the bots' walking graph needs a fine grid in this tight map
+    m.meshColor = 0xa9aeb8;
+    const S = 0.12,
+      XC = 8,
+      YC = -26;
+    const gx = (X) => +((X - XC) * S).toFixed(4);
+    const gy = (Z) => +((Z - 20) * S).toFixed(4);
+    const gz = (Y) => +(-(Y - YC) * S).toFixed(4);
+    const hid = { c: 0xa9aeb8, invisible: true };
+    /** Solid in model coordinates (invisible: the picture is the mesh). */
+    const bx = (X0, X1, Y0, Y1, Z0, Z1) => b.boxMM(gx(X0), gy(Z0), gz(Y1), gx(X1), gy(Z1), gz(Y0), hid);
+
+    // floor and the perimeter wall (inner faces at X -98.2 / 114.3 and Y -174.8 / 122.8, 100 units tall)
+    bx(-117, 133, -201, 149, 0, 20);
+    bx(-117, -98.2, -201, 149, 20, 120);
+    bx(114.3, 133, -201, 149, 20, 120);
+    bx(-117, 133, -201, -174.8, 20, 120);
+    bx(-117, 133, 122.8, 149, 20, 120);
+    // central roof (64 -> 84) on four pillars
+    bx(-21, 44, -55, 10, 64, 84);
+    for (const [x0, x1] of [[-21, -6], [29, 44]]) for (const [y0, y1] of [[-55, -40], [-5, 10]]) bx(x0, x1, y0, y1, 20, 64);
+    // four tall bars (to 80)
+    bx(-30.3, 29.7, -123.5, -103.5, 20, 80);
+    bx(-30.3, 29.7, 66.5, 86.5, 20, 80);
+    bx(-65, -45, -58, 2, 20, 80);
+    bx(58, 78, -46, 14, 20, 80);
+    // the two arches against the side walls: base 20 -> 27.5, top 62.5 -> 70, piers 7.5 wide
+    for (const [x0, x1, y0, y1] of [[-98, -48, -125, -109.7], [64, 114, 65, 80.3]]) {
+      bx(x0, x1, y0, y1, 20, 27.5);
+      bx(x0, x1, y0, y1, 62.5, 70);
+      bx(x0, x0 + 7.5, y0, y1, 27.5, 62.5);
+      bx(x1 - 7.5, x1, y0, y1, 27.5, 62.5);
+    }
+    // the two turned arches: a rectangle B -> C long, B -> A wide; piers 7.3 long at each end
+    for (const [B, C, A] of [
+      [[37.56, -101.02], [81.97, -81.12], [31.93, -86.31]],
+      [[-62.39, 14.38], [-17.98, 34.28], [-68.03, 29.09]],
+    ]) {
+      const L = Math.hypot(C[0] - B[0], C[1] - B[1]),
+        W = Math.hypot(A[0] - B[0], A[1] - B[1]);
+      const uv = [(C[0] - B[0]) / L, (C[1] - B[1]) / L],
+        vv = [(A[0] - B[0]) / W, (A[1] - B[1]) / W];
+      const poly = (u0, u1) => [
+        [B[0] + uv[0] * u0, B[1] + uv[1] * u0],
+        [B[0] + uv[0] * u1, B[1] + uv[1] * u1],
+        [B[0] + uv[0] * u1 + vv[0] * W, B[1] + uv[1] * u1 + vv[1] * W],
+        [B[0] + uv[0] * u0 + vv[0] * W, B[1] + uv[1] * u0 + vv[1] * W],
+      ];
+      // a staircase of boxes (2 model units wide in X) filling the convex polygon between two heights
+      const fill = (pl, z0, z1) => {
+        const xs = pl.map((p) => p[0]);
+        const lo = Math.min(...xs),
+          hi = Math.max(...xs);
+        for (let x = lo; x < hi - 1e-6; x += 2) {
+          const xa = x,
+            xb = Math.min(hi, x + 2),
+            xm = (xa + xb) / 2;
+          const ys = [];
+          for (let i = 0; i < 4; i++) {
+            const p = pl[i],
+              q = pl[(i + 1) % 4];
+            if ((p[0] - xm) * (q[0] - xm) <= 0 && p[0] !== q[0]) ys.push(p[1] + ((xm - p[0]) / (q[0] - p[0])) * (q[1] - p[1]));
+          }
+          if (ys.length >= 2) bx(xa, xb, Math.min(...ys), Math.max(...ys), z0, z1);
+        }
+      };
+      fill(poly(0, L), 20, 27.5);
+      fill(poly(0, L), 62.5, 70);
+      fill(poly(0, 7.3), 27.5, 62.5);
+      fill(poly(L - 7.3, L), 27.5, 62.5);
+    }
+    // the two steep ramps (solid wedges): A rises towards the middle of the map along model -Y, B along +Y
+    b.ramp(gx(-98.25), gz(102.58), gx(-52), gz(52.58), gy(20), gy(85), '+z', Object.assign({ bottom: gy(0) }, hid));
+    b.ramp(gx(66), gz(-111), gx(114.26), gz(-161), gy(20), gy(85), '-z', Object.assign({ bottom: gy(0) }, hid));
+
+    m.dummies = [
+      { x: gx(-30), y: 0, z: gz(-150), yaw: 0 },
+      { x: gx(40), y: 0, z: gz(100), yaw: Math.PI },
+    ];
+    // spawns: both ends behind the bars, four corners and the two side lanes (all on the floor)
+    for (const [sx, sy2] of [
+      [8, -155],
+      [8, 102],
+      [-75, -150],
+      [95, 100],
+      [50, -150],
+      [-35, 100],
+      [-80, -20],
+      [96, -30],
+    ]) b.spawn(gx(sx), 0, gz(sy2));
+    m.clouds = 6;
+    return m;
+  }
+
   RV.maps = {
     toybox: toybox(),
+    testarena: testArena(),
     skybridge: skybridge(),
     pinwheel: pinwheel(),
     vertigo: vertigo(),
     yard: yard(),
     gauntlet: gauntlet(),
   };
-  RV.mapOrder = ['toybox', 'skybridge', 'pinwheel', 'vertigo', 'yard', 'gauntlet'];
+  RV.mapOrder = ['toybox', 'skybridge', 'pinwheel', 'vertigo', 'testarena', 'yard', 'gauntlet'];
   // the four compact duel maps are also the online 1v1 maps
   for (const id of RV.mapOrder) if (RV.maps[id].modes.indexOf('duel') >= 0 && RV.maps[id].modes.indexOf('online') < 0) RV.maps[id].modes.push('online');
   RV.COL = COL;

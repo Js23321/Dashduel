@@ -36,7 +36,7 @@
   // Navigation graph
   // ===========================================================================
   class Nav {
-    constructor(world, spawns) {
+    constructor(world, spawns, step0) {
       this.world = world;
       this.nodes = [];
       this.live = [];
@@ -46,6 +46,7 @@
         hitX: 0, hitZ: 0, hitUp: false, landed: false, stepped: false,
       };
       this._g = { y: 0, nx: 0, ny: 1, nz: 0, solid: null };
+      this.step0 = step0;
       this.build(spawns || []);
     }
 
@@ -54,7 +55,7 @@
         bd = w.bounds;
       const spanX = bd.maxX - bd.minX,
         spanZ = bd.maxZ - bd.minZ;
-      let step = 4;
+      let step = this.step0 || 4; // grid spacing in metres (a map may ask for a finer one: tight maps need it)
       while ((spanX / step) * (spanZ / step) > 1300) step += 0.5;
       this.step = step;
       const nodes = this.nodes;

@@ -68,12 +68,14 @@ function script(seed, opts) {
 
 test('walking and sprinting: the server simulation matches the client prediction exactly, no corrections', async () => {
   const { m, sa } = await match();
-  await sa.run(2, () => ({ fw: 1, sprint: true }));
+  const rw = runway(m.map, 11); // (a clear straight line: the tight maps have walls and pillars close to every spawn)
+  await placeSim(m, sa, rw, rw.yaw);
+  await sa.run(1.1, () => ({ fw: 1, sprint: true }));
   const { d, err } = await settle(m, sa);
   assert.ok(err < 1e-6, 'client and server agree to the last bit, off by ' + err);
   assert.strictEqual(sa.fixes, 0, 'an honest client is never corrected');
   assert.ok(Math.hypot(sa.pl.b.vx, sa.pl.b.vz) > 5, 'and it really moved');
-  assert.ok(d.a > 100, 'the server ran ' + d.a + ' steps');
+  assert.ok(d.a > 60, 'the server ran ' + d.a + ' steps');
   m.a.close();
   m.b.close();
 });

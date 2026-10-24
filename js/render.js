@@ -87,6 +87,29 @@
       }
       this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     }
+    /** One triangle with a flat normal n (used for models loaded from data: RV.meshes). */
+    tri(a, b, c, n, color, tile) {
+      const base = this.pos.length / 3;
+      this.tmpC.setHex(color);
+      const ax = Math.abs(n[0]), ay = Math.abs(n[1]), az = Math.abs(n[2]);
+      const uvAxis = ay >= ax && ay >= az ? 1 : ax >= az ? 0 : 2;
+      const ymin = Math.min(a[1], b[1], c[1]);
+      for (const v of [a, b, c]) {
+        this.pos.push(v[0], v[1], v[2]);
+        this.nor.push(n[0], n[1], n[2]);
+        const u = uvAxis === 0 ? v[2] : v[0];
+        const w = uvAxis === 1 ? v[2] : v[1];
+        const t = tile || 1;
+        this.uv.push(u / t, w / t);
+        let sh = 1;
+        if (this.ao) {
+          if (n[1] < -0.5) sh = 0.6;
+          else if (n[1] <= 0.5) sh = 0.72 + 0.28 * Math.min(1, (v[1] - ymin) / 2.5);
+        }
+        this.col.push(this.tmpC.r * sh, this.tmpC.g * sh, this.tmpC.b * sh);
+      }
+      this.idx.push(base, base + 1, base + 2);
+    }
     /** Quad with an explicit texture rectangle (u0,v0)-(u1,v1): decals, shadows, banners. */
     quadUV(a, b, c, d, n, color, u0, v0, u1, v1) {
       let va = [a, u0, v0], vb = [b, u1, v0], vc = [c, u1, v1], vd = [d, u0, v1];
@@ -925,6 +948,7 @@
 
     for (const s of world.solids) {
       const d = s.def;
+      if (d.invisible) continue; // collision only (a map that is drawn from a model)
       const color = d.color != null ? d.color : 0x4c586c;
       if (!s.isRamp) {
         const x0 = s.minX, y0 = s.minY, z0 = s.minZ, x1 = s.maxX, y1 = s.maxY, z1 = s.maxZ;
@@ -960,6 +984,18 @@
         if (!s.runnable && !d.metal && y0 >= -0.01 && y0 <= 0.05 && y1 - y0 > 0.5 && y1 - y0 < 14) R._contactShadow(shadow, s);
       } else {
         R._addRamp(main, side, trim, s, color, d.trim);
+      }
+    }
+
+    // a map drawn from a model: its triangles, one colour (collision for it is the invisible solids above)
+    const mdl = def.mesh && RV.meshes && RV.meshes[def.mesh];
+    if (mdl) {
+      const mc = def.meshColor != null ? def.meshColor : 0xa9aeb8;
+      const P = mdl.pos,
+        Nn = mdl.nor;
+      for (let i = 0; i < Nn.length / 3; i++) {
+        const o = i * 9;
+        main.tri([P[o], P[o + 1], P[o + 2]], [P[o + 3], P[o + 4], P[o + 5]], [P[o + 6], P[o + 7], P[o + 8]], [Nn[i * 3], Nn[i * 3 + 1], Nn[i * 3 + 2]], mc, TILE_MAIN);
       }
     }
 

@@ -20,7 +20,7 @@ where the server is with one setting. Practice, Duel, Deathmatch and Time Trial 
 | 120 Hz physics + 30 Hz snapshots + grenade/round timers | No process to run a tick | Yes | Yes (`setInterval` tick, movement stepped at 120 Hz) |
 | Runs the **same** physics as the browser | Would have to ship the game files into the function runtime | Needs a TypeScript/bundler pipeline to share `js/player.js` (classic scripts, not modules) | **Loads `js/{util,collision,maps,player,weapondata,grensim,netproto}.js` unchanged**, so prediction and the authority cannot drift apart |
 | Build step / dependencies | Cloud-specific tooling | npm, TypeScript, schema classes | None. `node server/server.js` |
-| Already tested | n/a | Rewrite + re-test | 79 automated tests + real-browser end-to-end runs |
+| Already tested | n/a | Rewrite + re-test | 81 automated tests + real-browser end-to-end runs |
 
 I chose the plain server because the central requirement (client prediction that is **bit-exact** with the server
 simulation) is easiest to guarantee when both sides run literally the same file. Colyseus would be a reasonable choice
@@ -97,7 +97,7 @@ searching / error states; the results screen offers **Rematch**; *Settings → N
   HMAC-SHA256 using `SESSION_SECRET` (random per start if unset). A token is verified in constant time. A valid token
   on a new connection **replaces** the old connection of the same session (a session is never in two places).
 * **Queue:** `queue` puts the connection in a FIFO list; two live, distinct sessions become a `Room` (random map from
-  the four compact duel maps). A session already inside a running match that sends `queue` is *re-attached* to that
+  the duel maps). A session already inside a running match that sends `queue` is *re-attached* to that
   match instead of being queued twice.
 * **Isolation:** each room has its own players, history, grenades and timers; nothing is shared. A bug or exception in
   one room aborts that room (both players are told) and never touches the others. Closed rooms are removed from the
@@ -287,7 +287,7 @@ PowerShell: `$env:SERVE_STATIC='1'; node server.js`.
 ### Automated tests
 ```bash
 cd server
-npm test                                # 79 tests, serial, ~5 min (timing-based: close other heavy programs while it runs)
+npm test                                # 81 tests, serial, ~5 min (timing-based: close other heavy programs while it runs)
 ```
 | File | Tests | Covers |
 |---|---|---|
@@ -295,6 +295,7 @@ npm test                                # 79 tests, serial, ~5 min (timing-based
 | `movement.test.js` | 12 | prediction == simulation bit-for-bit for walking/sprint/slide/hop/air-strafe/wall-run/double-jump, corrections, teleport / speed-hack / lump-after-stall / flooding / replay / aim-rate |
 | `combat.test.js` | 15 | server-side hits and headshots, lag compensation bounds, ammo/reload/cooldowns, melee, grenades, dead players, cheating clients' extra fields |
 | `anticheat.test.js` | 21 | every rule: weights, decay, warn, kick, lockout, severe-event kick, schema rejection, rate limiting, telemetry, redaction |
+| `map.test.js` | 2 | the Test Arena map: spawns clear and on the floor, a server-decided hit, a hidden opponent |
 | `protection.test.js` | 4 | spawn protection: no damage while protected, shooter told, attacking ends it, the void still kills, per round |
 | `session.test.js` | 12 | tokens, resume, replacement, reconnect grace and forfeit, rematch, room cleanup, information protection, misbehaving client mid-match |
 | `load.test.js` | 1 | 16 simultaneous matches with real input |

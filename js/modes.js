@@ -719,7 +719,7 @@
       return this.countdown <= 0 && !this.over;
     },
     init(g) {
-      g.nav = new RV.Nav(g.world, g.map.spawns);
+      g.nav = new RV.Nav(g.world, g.map.spawns, g.map.navStep);
       g.clearBots();
       const n = g.opts.bots || RV.settings.botCount;
       for (let i = 0; i < n; i++) g.bots.push(new RV.Bot(g, i, g.opts.diff || RV.settings.difficulty, false));
@@ -995,7 +995,7 @@
       return this.phase === 'live';
     },
     init(g) {
-      g.nav = new RV.Nav(g.world, g.map.spawns);
+      g.nav = new RV.Nav(g.world, g.map.spawns, g.map.navStep);
       g.clearBots();
       const bot = new RV.Bot(g, g.opts.botIndex != null ? g.opts.botIndex : Math.floor(rng() * 8), g.opts.diff || RV.settings.difficulty, false);
       bot.noAutoRespawn = true;

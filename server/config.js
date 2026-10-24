@@ -58,7 +58,7 @@ module.exports = {
   PROTOCOL: 2, // bump when the client/server messages change incompatibly
   TICK_HZ: 30, // snapshots and room housekeeping per second (movement is stepped at 120 Hz, see js/player.js)
   MAX_MESSAGE: 4096, // bytes per client message
-  MAPS: ['toybox', 'skybridge', 'pinwheel', 'vertigo'], // online 1v1 maps (compact duel maps)
+  MAPS: ['toybox', 'skybridge', 'pinwheel', 'vertigo', 'testarena'], // online 1v1 maps (the duel maps)
   TO: 5, // rounds to win a match
   COUNTDOWN: 3, // seconds locked in the spawn at the start of every round
   ROUND_TIME: 90, // seconds per round (then most health wins)
