@@ -54,8 +54,8 @@
     // hip poses follow the RIVALS first-person view (solved from its reference screenshots: tools/solve-hip-pose.js): the gun sits low on the
     // right, big, and its muzzle points in towards the crosshair (hipYaw / hipPitch, blended out while aiming), the muzzle ends up
     // just right of and below the crosshair so the centre of the screen stays clear
-    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1, -0.41], scale: 0.6, hip: [0.15, -0.127, -0.44], hipYaw: 0.082, hipPitch: 0.17, sight: [0, 0.1, 0.11], er: 0.44, erCentre: 0.34, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
-    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.094, -0.111, -0.403], hipYaw: 0.212, hipPitch: 0.3, sight: [0, 0.082, 0.095], er: 0.36, erCentre: 0.31, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
+    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1, -0.41], scale: 0.6, hip: [0.12, -0.102, -0.352], hipYaw: 0.082, hipPitch: 0.17, sight: [0, 0.1, 0.11], er: 0.35, erCentre: 0.27, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
+    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.089, -0.322], hipYaw: 0.212, hipPitch: 0.3, sight: [0, 0.082, 0.095], er: 0.29, erCentre: 0.25, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
     fists: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'punch', reload: 'none', sprintPose: 0.6, cas: null, noAds: true },
     grenade: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'throw', reload: 'none', sprintPose: 0.7, cas: null, noAds: true },
   };
