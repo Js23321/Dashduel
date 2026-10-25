@@ -42,6 +42,7 @@
   // Session control
   // ---------------------------------------------------------------------------
   /** All state changes go through here so input is only live while actually playing. */
+  G._loadTried = {};
   G.setState = function (st) {
     G.state = st;
     RV.input.enabled = st === 'playing';
@@ -49,6 +50,21 @@
   };
 
   G.start = function (mode, mapId, opts) {
+    // the map's picture is fetched on demand (usually it is already there: the lobby loads them in the background)
+    const want = RV.maps[mapId];
+    if (want && want.mesh && RV.loadMeshes && !(RV.meshes && RV.meshes[want.mesh]) && !G._loadTried[mapId]) {
+      G._loadTried[mapId] = true;
+      const box = document.getElementById('map-loading');
+      if (box) {
+        document.getElementById('map-loading-text').textContent = 'Loading ' + want.name + '…';
+        box.classList.remove('hidden');
+      }
+      RV.loadMeshes(mapId).then(() => {
+        if (box) box.classList.add('hidden');
+        G.start(mode, mapId, opts); // (if the picture could not be fetched the map is drawn from its collision boxes)
+      });
+      return;
+    }
     G.mode = mode;
     G.mapId = mapId;
     G.opts = opts || {};
@@ -76,6 +92,10 @@
     RV.hud.show();
     R().warmup();
     G.beginRun();
+    // lobby -> match: the canvas fades in (css/lobby.css), the 3D lobby has stopped drawing by now
+    const html = document.documentElement;
+    html.classList.add('entering');
+    setTimeout(() => html.classList.remove('entering'), 600);
     RV.input.requestLock();
     G.lockWait = 0;
     RV.audio.init();
@@ -361,6 +381,31 @@
   // ---------------------------------------------------------------------------
   // Frame update (variable dt) with fixed-step player simulation inside
   // ---------------------------------------------------------------------------
+  /**
+   * Camera-driven aiming (see js/vmanim.js): while ADS is on, the player's view turns toward the weapon's sight so that the sight ends up
+   * exactly on the crosshair and the gun hardly has to slide. The turn is added to the player's yaw / pitch as an INCREMENT of
+   * (target - what was already added), so mouse look stays fully additive (it never fights the turn) and releasing aim gives back exactly
+   * what aiming took. The shot follows the camera, and the network input carries the turned view, so the server agrees with it.
+   */
+  G.adsLook = { y: 0, p: 0, reset: -1 };
+  const adsTmp = { yaw: 0, pitch: 0 };
+  G.applyAdsLook = function (pl, ae) {
+    const L = G.adsLook;
+    if (G.modeImpl && G.modeImpl.canLook === false) return;
+    const t = RV.vmanim.adsCamAngles(G.weapons.adsWeapon.id, ae, adsTmp);
+    const dy = t.yaw - L.y,
+      dp = t.pitch - L.p;
+    if (dy === 0 && dp === 0) return;
+    pl.yaw += dy;
+    if (pl.yaw > Math.PI) pl.yaw -= RV.TAU;
+    else if (pl.yaw < -Math.PI) pl.yaw += RV.TAU;
+    const p0 = pl.pitch;
+    pl.pitch = RV.clamp(p0 + dp, -1.553, 1.553);
+    L.y += dy;
+    L.p += pl.pitch - p0; // (what was really applied, in case the pitch limit was hit)
+    pl.getForward(G.fwd);
+  };
+
   G.update = function (dtReal) {
     const inp = RV.input,
       S = RV.settings,
@@ -448,7 +493,15 @@
       inp.consume('aim');
     }
     if (G.weapons.reloading || G.weapons.switchT > 0) G.adsToggled = false;
+    if (pl.resets !== G.adsLook.reset) {
+      // the look was replaced (new round / respawn / teleport): no camera turn is carried over
+      G.adsLook.reset = pl.resets;
+      G.adsLook.y = G.adsLook.p = 0;
+      G.weapons.adsT = 0;
+      G.weapons.ads = 0;
+    }
     G.zoom = G.weapons.updateAds(live ? dtReal : 0, wantAds);
+    if (live) G.applyAdsLook(pl, G.zoom);
     const kickTarget = S.fovKick ? RV.clamp((speed - 10) * 0.5, 0, 12) : 0;
     G.fovBoost = RV.damp(G.fovBoost, kickTarget, 5, dtReal);
     const baseH = S.fov + G.fovBoost * (1 - G.zoom);
@@ -500,7 +553,7 @@
       vs.sliding = pl.mode === 'slide' && pl.b.grounded;
       vs.wallrun = pl.wallRunning;
       vs.wallSide = pl.wallSide;
-      vs.sprint = G.cmd.sprint && G.cmd.fwd > 0;
+      vs.sprint = false; // (no sprint pose: the default speed is the run speed, the weapon stays up)
       vs.vy = pl.b.vy;
       vs.firing = inp.isDown('fire') && G.canShoot();
       vs.fx = R().fxLevel || S.effects;
@@ -1029,16 +1082,11 @@
       const bot = g.bots[0];
       // spawn on opposite sides; the side alternates every round
       const sp = g.map.spawns;
-      const a = sp[Math.floor(rng() * sp.length)];
-      let far = a,
-        fd = -1;
-      for (const s of sp) {
-        const d = Math.hypot(s.x - a.x, s.z - a.z, (s.y - a.y) * 0.5) + rng() * 3;
-        if (d > fd) {
-          fd = d;
-          far = s;
-        }
-      }
+      this.recentSpawns = this.recentSpawns || [];
+      if (this.round === 1) this.recentSpawns.length = 0;
+      const pair = RV.pickSpawnPair(sp, this.recentSpawns, rng); // a different place than the last rounds, never next to the opponent
+      const a = sp[pair[0]],
+        far = sp[pair[1]];
       this.flip = !this.flip;
       const ps = this.flip ? a : far,
         bs = this.flip ? far : a;
@@ -1098,9 +1146,7 @@
         }
         if (this.phaseT <= 0) {
           this.phase = 'live';
-          g.player.frozen = false;
-          g.protect(null);
-          g.protect(g.bots[0]);
+          g.player.frozen = false; // (no invulnerability after FIGHT: the frozen 3 s countdown is the protection)
           RV.audio.play('go');
           RV.hud.center('FIGHT', '#ffd23f', true, 650);
         }

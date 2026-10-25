@@ -94,6 +94,7 @@ function makePlayer(client, seat, world) {
     protUntil: 0, // spawn protection: no damage until this wall-clock time (ms), or until the player attacks
     reload: null,
     lastFireSim: -9,
+    fireDebt: 0,
     lastPunchSim: -9,
     switchUntilSim: 0,
     lastSwitchSim: -9,
@@ -105,7 +106,7 @@ function makePlayer(client, seat, world) {
 }
 
 function freshTele() {
-  return { shots: 0, hits: 0, heads: 0, minInt: 99, sumInt: 0, nInt: 0, maxTurn: 0, flickHits: 0, fixes: 0, mism: 0, stepsIn: 0, violations: 0 };
+  return { shots: 0, hits: 0, heads: 0, minInt: 99, sumInt: 0, nInt: 0, maxTurn: 0, flickHits: 0, fixes: 0, mism: 0, stepsIn: 0, violations: 0, fireActs: 0, drops: {} };
 }
 
 class Room {
@@ -252,25 +253,43 @@ class Room {
 
   /** A discrete request. It is executed when the simulation has reached the step the client sent it at. */
   onAct(p, m, t) {
-    if (m.rn !== this.round) return;
+    if (m.a === 'fire') p.tele.fireActs++;
+    if (m.rn !== this.round) {
+      this.drop(p, 'stale_round');
+      return;
+    }
     if (!p.alive) {
+      this.drop(p, 'dead');
       if (this.phase === 'live' || this.phase === 'ended') this.violate(p, 'fire_dead', { a: m.a }); // a dead player acting is impossible for an honest client
       return;
     }
-    if (this.phase !== 'live' || p.away) return;
+    if (this.phase !== 'live' || p.away) {
+      this.drop(p, 'not_live');
+      return;
+    }
     if (m.q > p.recvSeq) {
+      this.drop(p, 'act_future');
       this.violate(p, 'act_future', { q: m.q, have: p.recvSeq });
       return;
     }
     if (m.q < p.lastActQ) {
+      this.drop(p, 'act_order');
       this.violate(p, 'act_order', { q: m.q, last: p.lastActQ });
       return;
     }
-    if (p.acts.length >= 64) return;
+    if (p.acts.length >= 64) {
+      this.drop(p, 'queue_full');
+      return;
+    }
     p.lastActQ = m.q;
     p.acts.push({ q: m.q, a: m.a, s: m.s });
     this.advance(p, t);
     this.flushFix(p, t);
+  }
+
+  /** Count an action the server ignored (telemetry only: it shows why a click did nothing; see /debug/rooms). */
+  drop(p, why) {
+    p.tele.drops[why] = (p.tele.drops[why] || 0) + 1;
   }
 
   // ---------------------------------------------------------------------------
@@ -386,6 +405,28 @@ class Room {
     return h[h.length - 1];
   }
 
+  /**
+   * Lag compensation: the opponent as the shooter saw them when they clicked. The base estimate is the shooter's round trip plus the
+   * interpolation delay of the clients; because that is only an estimate (jitter, a ping sample that is a little old) two neighbours in
+   * time are tried as well, and the box is a little wider and taller than the body (CFG.LAG). The nearest hit along the ray wins.
+   * Returns {t, qp} (hit distance along the ray and where the target was) or null.
+   */
+  lagHit(shooter, q, t, o, d, maxT, pad, yLo, yHi) {
+    const L = CFG.LAG;
+    const base = clamp(shooter.cl.rttLC + L.INTERP_MS, 0, L.MAX_REWIND_MS);
+    const offs = L.JITTER_MS > 0 ? [0, L.JITTER_MS, -L.JITTER_MS] : [0];
+    const px = HW + L.TOL_XZ + pad;
+    const lo = yLo == null ? L.TOL_Y : yLo,
+      hi = yHi == null ? L.TOL_Y : yHi;
+    let best = null;
+    for (const off of offs) {
+      const qp = this.histAt(q, t - clamp(base + off, 0, L.MAX_REWIND_MS));
+      const hit = RV.rayAABB(o.x, o.y, o.z, d.x, d.y, d.z, qp.x - px, qp.y - lo, qp.z - px, qp.x + px, qp.y + qp.h + hi, qp.z + px, maxT);
+      if (hit >= 0 && (!best || hit < best.t)) best = { t: hit, qp };
+    }
+    return best;
+  }
+
   /** The fastest view turn (rad/s) in the last 0.1 s of the player's input. */
   recentTurn(p) {
     let m = 0;
@@ -429,7 +470,10 @@ class Room {
 
   doAct(p, a, t) {
     const simT = p.seqDone * STEP;
-    if (a.s !== p.slot && !this.trySwitch(p, a.s, simT)) return;
+    if (a.s !== p.slot && !this.trySwitch(p, a.s, simT)) {
+      this.drop(p, 'switch_refused');
+      return;
+    }
     switch (a.a) {
       case 'fire':
         return this.doFire(p, t, simT);
@@ -465,17 +509,38 @@ class Room {
       this.violate(p, 'fire_wrong_weapon', { slot: p.slot });
       return;
     }
-    if (simT < p.switchUntilSim || p.reload) return; // still switching / reloading: the client does not shoot then either
+    if (simT < p.switchUntilSim) {
+      this.drop(p, 'switching');
+      return;
+    }
+    // the browser's reload timer runs on the wall clock, the server's in simulation steps: a shot a hair early still counts as after the reload
+    if (p.reload && p.reload.slot === p.slot && simT >= p.reload.doneSim - CFG.RELOAD_TOLERANCE_S) {
+      const rs = p.reload.slot;
+      const take = Math.min(WEAPONS[rs].mag - p.ammo[rs], p.reserve[rs]);
+      p.ammo[rs] += take;
+      p.reserve[rs] -= take;
+      p.reload = null;
+    }
+    if (p.reload) {
+      this.drop(p, 'reloading');
+      return; // (the client does not shoot while reloading either; see finishReloads for the small timing margin)
+    }
     if (p.ammo[p.slot] <= 0) {
+      this.drop(p, 'no_ammo');
       this.startReload(p, simT, false);
       this.violate(p, 'fire_no_ammo', {});
       return;
     }
     const gap = simT - p.lastFireSim;
-    if (gap < w.interval * CFG.FIRE_INTERVAL_TOLERANCE) {
-      this.violate(p, 'fire_rate', { gap: r3(gap), min: r3(w.interval * CFG.FIRE_INTERVAL_TOLERANCE) });
+    // fire rate = a leaky bucket of "owed" firing time: every shot adds one interval, time drains it. A long frame in the browser fires two
+    // shots in one go (the same step number): that is forgiven up to CFG.FIRE_SLACK_S, but the average rate can never beat the interval.
+    const owed = Math.max(0, p.fireDebt - Math.max(0, gap)) + w.interval;
+    if (owed > w.interval + CFG.FIRE_SLACK_S) {
+      this.drop(p, 'fire_rate');
+      this.violate(p, 'fire_rate', { gap: r3(gap), min: r3(w.interval) });
       return;
     }
+    p.fireDebt = owed;
     if (p.lastFireSim > 0 || gap < 5) {
       p.tele.minInt = Math.min(p.tele.minInt, gap);
       p.tele.sumInt += gap;
@@ -496,11 +561,11 @@ class Room {
     const q = this.opp(p);
     if (q.alive && !q.away) {
       // the shooter saw the opponent about (their round trip + the interpolation delay) ago; never further back than the cap
-      const qp = this.histAt(q, t - clamp(p.cl.rtt + CFG.LAG.INTERP_MS, 0, CFG.LAG.MAX_REWIND_MS));
-      const hit = RV.rayAABB(o.x, o.y, o.z, d.x, d.y, d.z, qp.x - HW, qp.y, qp.z - HW, qp.x + HW, qp.y + qp.h, qp.z + HW, tW);
-      if (hit >= 0) {
+      const lh = this.lagHit(p, q, t, o, d, tW, 0);
+      if (lh) {
+        const hit = lh.t;
         end = hit;
-        const head = o.y + d.y * hit >= qp.y + qp.h - 0.3;
+        const head = o.y + d.y * hit >= lh.qp.y + lh.qp.h - 0.3;
         const dmg = Math.round(RV.damageAt(w, hit) * (head ? w.headMul || 1 : 1));
         if (head) p.tele.heads++;
         if (this.recentTurn(p) > 25) p.tele.flickHits++; // a hit right after a very fast flick (telemetry only)
@@ -530,13 +595,12 @@ class Room {
     const q = this.opp(p);
     q.cl.send({ t: 'fx', k: 'punch' });
     if (!q.alive || q.away) return;
-    const qp = this.histAt(q, t - clamp(p.cl.rtt + CFG.LAG.INTERP_MS, 0, CFG.LAG.MAX_REWIND_MS));
     const range = FISTS.range + 0.4;
     const rh = {};
     const hitW = this.world.raycast(o.x, o.y, o.z, d.x, d.y, d.z, range, rh);
     const tW = hitW ? rh.t : range;
-    const pad = FISTS.reach;
-    const hit = RV.rayAABB(o.x, o.y, o.z, d.x, d.y, d.z, qp.x - HW - pad, qp.y - 0.15, qp.z - HW - pad, qp.x + HW + pad, qp.y + qp.h + 0.1, qp.z + HW + pad, tW);
+    const lh = this.lagHit(p, q, t, o, d, tW, FISTS.reach, 0.15, 0.1);
+    const hit = lh ? lh.t : -1;
     if (hit >= 0) this.damage(q, FISTS.dmg, p, { head: false, src: 'fists', from: o });
   }
 
@@ -654,16 +718,8 @@ class Room {
 
   startRound() {
     const sp = this.map.spawns;
-    const a = Math.floor(Math.random() * sp.length);
-    let far = a,
-      fd = -1;
-    for (let i = 0; i < sp.length; i++) {
-      const d = Math.hypot(sp[i].x - sp[a].x, sp[i].z - sp[a].z, (sp[i].y - sp[a].y) * 0.5) + Math.random() * 3;
-      if (d > fd) {
-        fd = d;
-        far = i;
-      }
-    }
+    this.recentSpawns = this.recentSpawns || [];
+    const [a, far] = RV.pickSpawnPair(sp, this.recentSpawns); // a different place than the last rounds, never next to the opponent
     this.flip = !this.flip;
     const idx = [this.flip ? a : far, this.flip ? far : a];
     this.round++;
@@ -695,6 +751,7 @@ class Room {
       p.protUntil = 0;
       p.reload = null;
       p.lastFireSim = -9;
+      p.fireDebt = 0;
       p.lastPunchSim = -9;
       p.switchUntilSim = 0;
       p.lastSwitchSim = -9;

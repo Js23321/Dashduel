@@ -228,6 +228,13 @@
     candy: { hill: 0xb06ad0, top: 0x8b5cf6, bottom: 0xffc2e0, fog: 0xffd6ea, fogNear: 70, fogFar: 300, hemi: [0xfff0f8, 0xc4a7e8, 2.02], sun: [0xffe0f0, 1.6] },
     arena: { hill: 0x7f93c4, top: 0x5aa8ff, bottom: 0xe6f1ff, fog: 0xe6f1ff, fogNear: 80, fogFar: 360, hemi: [0xffffff, 0xc3cde6, 2.1], sun: [0xfff6e6, 1.62] },
     mint: { hill: 0x3fb596, top: 0x38bdf8, bottom: 0xe0f7fa, fog: 0xe0f7fa, fogNear: 70, fogFar: 300, hemi: [0xffffff, 0xa7d8c9, 2.1], sun: [0xf0fff8, 1.6] },
+    // the maps made in Blender (tools/blender/build_*.py)
+    city: { hill: 0x8fa0b5, top: 0x4f9bff, bottom: 0xdcecff, fog: 0xdbe8f5, fogNear: 100, fogFar: 380, hemi: [0xffffff, 0xb9c3d6, 2.15], sun: [0xfff3dc, 1.6] },
+    field: { hill: 0x5f9e5a, top: 0x3f8fff, bottom: 0xd9f0ff, fog: 0xd4ecff, fogNear: 120, fogFar: 520, hemi: [0xffffff, 0x9ec27a, 2.15], sun: [0xfff6e0, 1.7] },
+    harbour: { hill: 0x5d7388, top: 0x3a72d8, bottom: 0xffe0bd, fog: 0xe9dccb, fogNear: 100, fogFar: 430, hemi: [0xfff0dd, 0x9fb4c8, 2.1], sun: [0xffd9a8, 1.55] },
+    western: { hill: 0xc8925a, top: 0x4c9aff, bottom: 0xffe4b8, fog: 0xf2dfc0, fogNear: 110, fogFar: 470, hemi: [0xfff4e0, 0xd2b48a, 2.15], sun: [0xfff0d0, 1.75] },
+    // enclosed: no sun, hills or clouds are drawn; a short yellow haze and a strong ambient light keep every corridor readable
+    office: { indoor: true, hill: 0xb7a54e, top: 0xe8dca0, bottom: 0xe8dca0, fog: 0xd8c874, fogNear: 28, fogFar: 95, hemi: [0xfff6c8, 0xd9c577, 2.7], sun: [0xfff1b0, 0.55] },
   };
 
   // ===========================================================================
@@ -318,105 +325,6 @@
       b.decor(x - w / 2, -60, z - d / 2, x + w / 2, -60 + h, z + d / 2, tint[i % tint.length]);
     }
     m.clouds = 14;
-    return m;
-  }
-
-  // ===========================================================================
-  // VERTIGO - vertical arena. Central podium, corner decks, runnable
-  // perimeter walls and diagonal launch pads.
-  // ===========================================================================
-  function vertigo() {
-    const b = Builder('vertigo', 'Vertigo', 'dusk');
-    const m = b.m;
-    m.desc = 'A large vertical arena at dusk. Take the ramps, wall-run the perimeter between decks, or launch from the corner pads onto the central podium.';
-    m.modes = ['arena', 'duel', 'practice'];
-    m.size = 'Large';
-    m.sky = SKY.dusk;
-    m.killY = -30;
-
-    b.boxMM(-46, -3, -46, 46, 0, 46, { c: 'floor' });
-    b.perimeter(40, 40, 18, 4);
-
-    // central podium + ramps
-    b.boxMM(-9, 0, -9, 9, 6, 9, { c: 'platLight', wall: true, trim: COL.cyan });
-    b.box(0, 6, 0, 4, 9, 4, { c: 'block', trim: COL.cyan });
-    for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(sx * 5.8, 6, sz * 5.8, 2.2, 1.2, 2.2, { c: 'block' });
-    b.ramp(-4, -29, 4, -9, 0, 6, '+z', { trim: COL.cyan });
-    b.ramp(-4, 9, 4, 29, 0, 6, '-z', { trim: COL.cyan });
-    b.ramp(9, -4, 29, 4, 0, 6, '-x', { trim: COL.cyan });
-    b.ramp(-29, -4, -9, 4, 0, 6, '+x', { trim: COL.cyan });
-
-    // corner decks + ramps
-    b.boxMM(26, 0, -40, 40, 6, -26, { c: 'plat', trim: COL.magenta });
-    b.boxMM(-40, 0, -40, -26, 6, -26, { c: 'plat', trim: COL.orange });
-    b.boxMM(26, 0, 26, 40, 6, 40, { c: 'plat', trim: COL.lime });
-    b.boxMM(-40, 0, 26, -26, 6, 40, { c: 'plat', trim: COL.cyan });
-    b.ramp(8, -37, 26, -29, 0, 6, '+x', { trim: COL.magenta });
-    b.ramp(-26, -37, -8, -29, 0, 6, '-x', { trim: COL.orange });
-    b.ramp(8, 29, 26, 37, 0, 6, '+x', { trim: COL.lime });
-    b.ramp(-26, 29, -8, 37, 0, 6, '-x', { trim: COL.cyan });
-
-    // mid-side decks (wall-run / launch access only)
-    b.boxMM(-9, 0, -40, 9, 6, -34, { c: 'plat', trim: COL.yellow });
-    b.boxMM(-9, 0, 34, 9, 6, 40, { c: 'plat', trim: COL.yellow });
-    b.boxMM(-40, 0, -9, -34, 6, 9, { c: 'plat', trim: COL.yellow });
-    b.boxMM(34, 0, -9, 40, 6, 9, { c: 'plat', trim: COL.yellow });
-
-    // cover pillars
-    for (const [x, z] of [
-      [22, 12],
-      [-22, 12],
-      [22, -12],
-      [-22, -12],
-      [12, 22],
-      [-12, 22],
-      [12, -22],
-      [-12, -22],
-    ])
-      b.box(x, 0, z, 3, 6, 3, { c: 'block', trim: COL.blue });
-
-    // diagonal pads: ground -> podium top
-    b.pad(15, 0, 15, 4, 4, [-7.2, 21, -7.2], 0.25);
-    b.pad(-15, 0, 15, 4, 4, [7.2, 21, -7.2], 0.25);
-    b.pad(15, 0, -15, 4, 4, [-7.2, 21, 7.2], 0.25);
-    b.pad(-15, 0, -15, 4, 4, [7.2, 21, 7.2], 0.25);
-
-    b.decal('ring', 0, 0, 62, COL.white, 0, 0);
-    b.decal('ring', 0, 0, 46, COL.orange, 0, 0);
-    b.decal('cross', 0, 0, 9, COL.orange, 0, 6);
-    for (const [px, pz] of [[15, 15], [-15, 15], [15, -15], [-15, -15]]) b.decal('ring', px, pz, 8, COL.cyan, 0, 0);
-    for (const [ax, az, rot] of [[0, -33, Math.PI], [0, 33, 0], [-33, 0, -Math.PI / 2], [33, 0, Math.PI / 2]]) b.decal('arrow', ax, az, 5, COL.magenta, rot, 0);
-    m.dummies = [
-      { x: -10, y: 0, z: -26, yaw: 0 },
-      { x: 10, y: 0, z: -26, yaw: 0 },
-      { x: 0, y: 0, z: -20, yaw: 0 },
-      { x: -14, y: 0, z: -8, pace: { dx: 0, dz: 8, speed: 0.7 } },
-    ];
-    const sp = [
-      [0, 0, -33, Math.PI],
-      [0, 0, 33, 0],
-      [-33, 0, 0, -Math.PI / 2],
-      [33, 0, 0, Math.PI / 2],
-      [20, 0, 20],
-      [-20, 0, 20],
-      [20, 0, -20],
-      [-20, 0, -20],
-      [30, 6, 30],
-      [-30, 6, 30],
-      [30, 6, -30],
-      [-30, 6, -30],
-    ];
-    for (const s of sp) b.spawn(s[0], s[1], s[2], s[3]);
-
-    b.beacon(0, 0, 14, 70, COL.cyan, 0.8);
-    b.beacon(33, -33, 6, 60, COL.magenta);
-    b.beacon(-33, -33, 6, 60, COL.orange);
-    b.beacon(33, 33, 6, 60, COL.lime);
-    b.beacon(-33, 33, 6, 60, COL.cyan);
-    b.decor(-40, 14, -40.05, 40, 16, -39.95, COL.magenta);
-    b.decor(-40, 14, 39.95, 40, 16, 40.05, COL.lime);
-    b.decor(-40.05, 14, -40, -39.95, 16, 40, COL.orange);
-    b.decor(39.95, 14, -40, 40.05, 16, 40, COL.cyan);
     return m;
   }
 
@@ -558,372 +466,147 @@
   }
 
   // ===========================================================================
-  // TOYBOX - compact duel arena. A stepped centre, four corner towers and
-  // wall-run platforms along the sides. Mirror-symmetric, so every duel is fair.
+  // MAPS MADE IN BLENDER. tools/blender/build_<id>.py authors each one (boxes / ramps / prisms, collections per map) and exports
+  //   js/mapdata-<id>.js   collision solids + spawns (loaded by the browser AND by the server)
+  //   js/mesh-<id>.js      the triangles of the picture (browser only; if it is missing the solids are drawn as plain boxes)
+  // Both come from the same Blender scene, so what you see is what you collide with. Here only the per-map settings live.
   // ===========================================================================
-  function toybox() {
-    const b = Builder('toybox', 'Toybox', 'toy');
+  const FALLBACK = 0x9aa3b2;
+  function fromData(id, name, palName, cfg) {
+    const md = RV.mapdata && RV.mapdata[id];
+    if (!md) return null; // data file missing: the map is simply not offered (never a broken map)
+    const b = Builder(id, name, palName);
     const m = b.m;
-    m.desc = 'A compact toy-block arena: a stepped centre, four corner towers, side platforms you reach by wall running, and pads that fling you onto the top tier.';
-    m.modes = ['duel', 'arena', 'practice'];
-    m.size = 'Compact';
-    m.sky = SKY.toy;
-    m.killY = -30;
-
-    b.boxMM(-36, -3, -36, 36, 0, 36, { c: 'floor' });
-    b.perimeter(32, 32, 14, 4);
-
-    // stepped centre
-    b.boxMM(-10, 0, -10, 10, 2.5, 10, { c: 'platLight', trim: COL.orange });
-    b.boxMM(-5, 2.5, -5, 5, 5, 5, { c: 'plat', trim: COL.red });
-    b.ramp(-3.5, -22, 3.5, -10, 0, 2.5, '+z', { trim: COL.orange });
-    b.ramp(-3.5, 10, 3.5, 22, 0, 2.5, '-z', { trim: COL.orange });
-    b.ramp(5, -3, 10, 3, 2.5, 5, '-x', { trim: COL.red });
-    b.ramp(-10, -3, -5, 3, 2.5, 5, '+x', { trim: COL.red });
-
-    // corner towers + ramps
-    b.boxMM(17, 0, -27, 27, 4, -17, { c: 'plat', trim: COL.blue });
-    b.ramp(5, -25, 17, -19, 0, 4, '+x', { trim: COL.blue });
-    b.boxMM(-27, 0, -27, -17, 4, -17, { c: 'plat', trim: COL.lime });
-    b.ramp(-17, -25, -5, -19, 0, 4, '-x', { trim: COL.lime });
-    b.boxMM(17, 0, 17, 27, 4, 27, { c: 'plat', trim: COL.lime });
-    b.ramp(5, 19, 17, 25, 0, 4, '+x', { trim: COL.lime });
-    b.boxMM(-27, 0, 17, -17, 4, 27, { c: 'plat', trim: COL.blue });
-    b.ramp(-17, 19, -5, 25, 0, 4, '-x', { trim: COL.blue });
-
-    // side platforms along the walls (wall-run access)
-    b.boxMM(-8, 0, -32, 8, 4, -27, { c: 'plat', trim: COL.yellow });
-    b.boxMM(-8, 0, 27, 8, 4, 32, { c: 'plat', trim: COL.yellow });
-    b.boxMM(-32, 0, -8, -27, 4, 8, { c: 'plat', trim: COL.yellow });
-    b.boxMM(27, 0, -8, 32, 4, 8, { c: 'plat', trim: COL.yellow });
-
-    // toy-cube cover
-    for (const sx of [-1, 1])
-      for (const sz of [-1, 1]) {
-        b.box(sx * 14, 0, sz * 9, 3, 2.4, 3, { c: 'block' });
-        b.box(sx * 9, 0, sz * 17, 2.5, 1.5, 2.5, { c: 'block' });
-        b.box(sx * 22, 0, sz * 8, 3, 3, 3, { c: 'block', trim: COL.white });
-      }
-
-    // pads: ground -> top tier
-    b.pad(13, 0, 0, 4, 4, [-8, 20, 0], 0.2);
-    b.pad(-13, 0, 0, 4, 4, [8, 20, 0], 0.2);
-
-    const sp = [
-      [0, 0, -24.5, Math.PI],
-      [0, 0, 24.5, 0],
-      [-24, 0, 0],
-      [24, 0, 0],
-      [22, 4, -22],
-      [-22, 4, -22],
-      [22, 4, 22],
-      [-22, 4, 22],
-    ];
-    for (const s of sp) b.spawn(s[0], s[1], s[2], s[3]);
-    m.dummies = [
-      { x: 0, y: 0, z: -16 },
-      { x: 12, y: 0, z: 14, yaw: Math.PI },
-      { x: -12, y: 0, z: -14, pace: { dx: 8, dz: 0, speed: 0.8 } },
-    ];
-    b.decal('ring', 0, 0, 30, COL.orange, 0, 0);
-    b.decal('ring', 0, 0, 22.5, COL.white, 0, 0);
-    for (const sx of [-1, 1]) {
-      b.decal('arrow', sx * 6.5, -19, 4, COL.orange, 0, 0);
-      b.decal('arrow', sx * 6.5, 19, 4, COL.orange, Math.PI, 0);
-      b.decal('ring', sx * 13, 0, 8, COL.yellow, 0, 0);
+    for (const s of md.solids) {
+      if (s[0] === 'b') b.boxMM(s[1], s[2], s[3], s[4], s[5], s[6], { c: FALLBACK, invisible: true, wall: s[7] === 1 });
+      else b.ramp(s[1], s[2], s[3], s[4], s[5], s[6], s[7], { c: FALLBACK, invisible: true, bottom: s[8] });
     }
-    b.decal('cross', 0, -24.5, 6, COL.blue, 0, 0);
-    b.decal('cross', 0, 24.5, 6, COL.blue, 0, 0);
-    b.beacon(22, -22, 4, 50, COL.blue);
-    b.beacon(-22, -22, 4, 50, COL.lime);
-    b.beacon(22, 22, 4, 50, COL.lime);
-    b.beacon(-22, 22, 4, 50, COL.blue);
-    b.beacon(0, 0, 5, 60, COL.red, 0.7);
-    m.clouds = 10;
-    return m;
-  }
-
-  // ===========================================================================
-  // SKYBRIDGE - compact duel arena built around a long high bridge between two
-  // end platforms, with a lower ground route and pads that throw you up.
-  // ===========================================================================
-  function skybridge() {
-    const b = Builder('skybridge', 'Skybridge', 'candy');
-    const m = b.m;
-    m.desc = 'Two end platforms joined by a long sky bridge. Fight on the bridge, underneath it, or ride the centre pads up. Ramps and wall-run walls connect everything.';
+    for (const sp of md.spawns) b.spawn(sp[0], sp[1], sp[2], sp.length > 3 ? sp[3] : undefined);
+    m.dummies = md.dummies.map((d) => ({ x: d[0], y: d[1], z: d[2], yaw: d[3] }));
+    m.mesh = id;
+    m.meshColor = FALLBACK;
     m.modes = ['duel', 'arena', 'practice'];
-    m.size = 'Compact';
-    m.sky = SKY.candy;
-    m.killY = -30;
-
-    b.boxMM(-40, -3, -26, 40, 0, 26, { c: 'floor' });
-    b.perimeter(36, 22, 14, 4);
-
-    // end platforms + access ramps
-    b.boxMM(26, 0, -22, 36, 5, 22, { c: 'plat', trim: COL.magenta });
-    b.boxMM(-36, 0, -22, -26, 5, 22, { c: 'plat', trim: COL.cyan });
-    b.ramp(14, -18, 26, -10, 0, 5, '+x', { trim: COL.magenta });
-    b.ramp(14, 10, 26, 18, 0, 5, '+x', { trim: COL.magenta });
-    b.ramp(-26, -18, -14, -10, 0, 5, '-x', { trim: COL.cyan });
-    b.ramp(-26, 10, -14, 18, 0, 5, '-x', { trim: COL.cyan });
-
-    // the bridge (walk under it: clearance 4m)
-    b.boxMM(-26, 4, -3, 26, 5, 3, { c: 'platLight', trim: COL.yellow });
-    // little cover on the bridge
-    b.box(-10, 5, 0, 1.2, 1.2, 4, { c: 'block' });
-    b.box(10, 5, 0, 1.2, 1.2, 4, { c: 'block' });
-
-    // ground cover
-    for (const [x, z, w, h, d] of [
-      [-8, -11, 3, 2.4, 3],
-      [8, -11, 3, 2.4, 3],
-      [-8, 11, 3, 2.4, 3],
-      [8, 11, 3, 2.4, 3],
-      [-18, 0, 2.5, 3, 5],
-      [18, 0, 2.5, 3, 5],
-      [0, -17, 5, 1.5, 2],
-      [0, 17, 5, 1.5, 2],
-    ])
-      b.box(x, 0, z, w, h, d, { c: 'block', trim: COL.white });
-
-    // pads up to the bridge
-    b.pad(0, 0, 11, 4, 4, [0, 20, -9], 0.2);
-    b.pad(0, 0, -11, 4, 4, [0, 20, 9], 0.2);
-
-    const sp = [
-      [-31, 5, 0],
-      [31, 5, 0],
-      [-4, 0, -17],
-      [4, 0, 17],
-      [-12, 0, 18],
-      [12, 0, -18],
-      [-31, 5, -16],
-      [31, 5, 16],
-    ];
-    for (const s of sp) b.spawn(s[0], s[1], s[2], s[3]);
-    m.dummies = [
-      { x: 0, y: 0, z: -17 + 4, yaw: 0 },
-      { x: 18, y: 0, z: 8, yaw: Math.PI },
-      { x: -18, y: 0, z: -8, pace: { dx: 0, dz: 8, speed: 0.7 } },
-    ];
-    b.decal('stripe', 0, -17.5, 8, COL.yellow, 0, 0, 3);
-    b.decal('stripe', 0, 17.5, 8, COL.yellow, 0, 0, 3);
-    b.decal('ring', 0, 11, 8, COL.cyan, 0, 0);
-    b.decal('ring', 0, -11, 8, COL.cyan, 0, 0);
-    b.decal('arrow', 0, 6, 5, COL.magenta, Math.PI, 0);
-    b.decal('arrow', 0, -6, 5, COL.magenta, 0, 0);
-    b.decal('cross', 0, 0, 12, COL.white, 0, 0);
-    b.decal('arrow', 31, 8, 5, COL.magenta, Math.PI / 2, 5);
-    b.decal('arrow', -31, -8, 5, COL.cyan, -Math.PI / 2, 5);
-    b.beacon(31, 0, 5, 55, COL.magenta);
-    b.beacon(-31, 0, 5, 55, COL.cyan);
-    b.beacon(0, 0, 6, 60, COL.yellow, 0.7);
-    m.clouds = 10;
+    Object.assign(m, cfg);
     return m;
   }
 
-  // ===========================================================================
-  // PINWHEEL - compact duel arena with rotational symmetry: four corner decks,
-  // a pinwheel of wall-run walls in the middle, and pads that throw you
-  // clockwise onto the next deck.
-  // ===========================================================================
-  function pinwheel() {
-    const b = Builder('pinwheel', 'Pinwheel', 'mint');
-    const m = b.m;
-    m.desc = 'Rotationally symmetric: four raised decks, a pinwheel of runnable walls in the middle and pads that fling you clockwise from deck to deck.';
-    m.modes = ['duel', 'arena', 'practice'];
-    m.size = 'Compact';
-    m.sky = SKY.mint;
-    m.killY = -30;
-
-    b.boxMM(-32, -3, -32, 32, 0, 32, { c: 'floor' });
-    b.perimeter(28, 28, 12, 4);
-
-    // corner decks, each with a ramp rising along the pinwheel direction
-    b.boxMM(14, 0, -26, 26, 4, -18, { c: 'plat', trim: COL.cyan });
-    b.ramp(2, -26, 14, -18, 0, 4, '+x', { trim: COL.cyan });
-    b.boxMM(18, 0, 14, 26, 4, 26, { c: 'plat', trim: COL.magenta });
-    b.ramp(18, 2, 26, 14, 0, 4, '+z', { trim: COL.magenta });
-    b.boxMM(-26, 0, 18, -14, 4, 26, { c: 'plat', trim: COL.orange });
-    b.ramp(-14, 18, -2, 26, 0, 4, '-x', { trim: COL.orange });
-    b.boxMM(-26, 0, -26, -18, 4, -14, { c: 'plat', trim: COL.lime });
-    b.ramp(-26, -14, -18, -2, 0, 4, '-z', { trim: COL.lime });
-
-    // pinwheel walls (runnable, 3.5 high) and a low centre block
-    b.wall(-12, 0, -9.5, 2, 3.5, -8);
-    b.wall(8, 0, -12, 9.5, 3.5, 2);
-    b.wall(-2, 0, 8, 12, 3.5, 9.5);
-    b.wall(-9.5, 0, -2, -8, 3.5, 12);
-    b.boxMM(-4, 0, -4, 4, 1.4, 4, { c: 'platLight', trim: COL.yellow });
-
-    // pads: each launches clockwise onto the next deck
-    b.pad(0, 0, -24, 4, 4, [18, 17, 0], 0.2);
-    b.pad(24, 0, 0, 4, 4, [0, 17, 18], 0.2);
-    b.pad(0, 0, 24, 4, 4, [-18, 17, 0], 0.2);
-    b.pad(-24, 0, 0, 4, 4, [0, 17, -18], 0.2);
-
-    // a little cover in the corners
-    for (const [x, z] of [
-      [16, 10],
-      [-16, -10],
-      [10, -16],
-      [-10, 16],
-    ])
-      b.box(x, 0, z, 3, 2.2, 3, { c: 'block', trim: COL.white });
-
-    const sp = [
-      [10, 0, -14],
-      [14, 0, 10],
-      [-10, 0, 14],
-      [-14, 0, -10],
-      [22, 4, -22],
-      [22, 4, 22],
-      [-22, 4, 22],
-      [-22, 4, -22],
-    ];
-    for (const s of sp) b.spawn(s[0], s[1], s[2], s[3]);
-    m.dummies = [
-      { x: 0, y: 0, z: -14 },
-      { x: 14, y: 0, z: 0, yaw: -Math.PI / 2 },
-      { x: -14, y: 0, z: 4, pace: { dx: 0, dz: 8, speed: 0.7 } },
-    ];
-    b.decal('cross', 0, 0, 7, COL.yellow, 0, 1.4);
-    b.decal('ring', 0, 0, 40, COL.white, 0, 0);
-    b.decal('ring', 0, 0, 26, COL.cyan, 0, 0);
-    for (const [px, pz, c] of [[0, -24, COL.cyan], [24, 0, COL.magenta], [0, 24, COL.orange], [-24, 0, COL.lime]]) b.decal('ring', px, pz, 9, c, 0, 0);
-    for (const [ax, az, rot] of [[8, -17, -Math.PI / 2], [17, 8, 0], [-8, 17, Math.PI / 2], [-17, -8, Math.PI]]) b.decal('arrow', ax, az, 4, COL.yellow, rot, 0);
-    b.beacon(20, -22, 4, 50, COL.cyan);
-    b.beacon(22, 20, 4, 50, COL.magenta);
-    b.beacon(-20, 22, 4, 50, COL.orange);
-    b.beacon(-22, -20, 4, 50, COL.lime);
-    m.clouds = 10;
-    return m;
-  }
-
-  // ===========================================================================
-  // TEST ARENA - the CC0 "Rivals Arena Map" 3D-print model (_models/rivals-arena-map.stl), exactly: the picture is the
-  // model's own 358 triangles (js/mesh-testarena.js, made by tools/make-testarena.js), all one grey. The collision
-  // below is the same shapes as invisible boxes / ramps, with the same transform, so you stand where you see:
-  //   x = (X - 8) * 0.12,  y = (Z - 20) * 0.12,  z = -(Y - -26) * 0.12      (model units -> metres, floor at 0)
-  // It is built from: a floor and a 100-unit-high perimeter wall; a central roof on four pillars (open passages
-  // through it in both directions); four tall solid bars; two steep ramps up to 85; two arches against the side walls
-  // and two turned arches (each a base slab, a top slab and two end piers around a 35-unit-wide opening).
-  // The turned arches are not axis-aligned, so their collision is a fine staircase of boxes (2 model units a step).
-  // ===========================================================================
-  function testArena() {
-    const b = Builder('testarena', 'Test Arena', 'arena');
-    const m = b.m;
-    m.desc = 'The exact "Rivals Arena Map" 3D model (CC0), all in grey: a walled arena with a central roof on four pillars, four tall bars, two steep ramps up to high ledges and four arches you can run through.';
-    m.modes = ['duel', 'arena', 'practice'];
-    m.size = 'Compact';
-    m.sky = SKY.arena;
-    m.killY = -30;
-    m.mesh = 'testarena';
-    m.navStep = 1.5; // the bots' walking graph needs a fine grid in this tight map
-    m.meshColor = 0xa9aeb8;
-    const S = 0.12,
-      XC = 8,
-      YC = -26;
-    const gx = (X) => +((X - XC) * S).toFixed(4);
-    const gy = (Z) => +((Z - 20) * S).toFixed(4);
-    const gz = (Y) => +(-(Y - YC) * S).toFixed(4);
-    const hid = { c: 0xa9aeb8, invisible: true };
-    /** Solid in model coordinates (invisible: the picture is the mesh). */
-    const bx = (X0, X1, Y0, Y1, Z0, Z1) => b.boxMM(gx(X0), gy(Z0), gz(Y1), gx(X1), gy(Z1), gz(Y0), hid);
-
-    // floor and the perimeter wall (inner faces at X -98.2 / 114.3 and Y -174.8 / 122.8, 100 units tall)
-    bx(-117, 133, -201, 149, 0, 20);
-    bx(-117, -98.2, -201, 149, 20, 120);
-    bx(114.3, 133, -201, 149, 20, 120);
-    bx(-117, 133, -201, -174.8, 20, 120);
-    bx(-117, 133, 122.8, 149, 20, 120);
-    // central roof (64 -> 84) on four pillars
-    bx(-21, 44, -55, 10, 64, 84);
-    for (const [x0, x1] of [[-21, -6], [29, 44]]) for (const [y0, y1] of [[-55, -40], [-5, 10]]) bx(x0, x1, y0, y1, 20, 64);
-    // four tall bars (to 80)
-    bx(-30.3, 29.7, -123.5, -103.5, 20, 80);
-    bx(-30.3, 29.7, 66.5, 86.5, 20, 80);
-    bx(-65, -45, -58, 2, 20, 80);
-    bx(58, 78, -46, 14, 20, 80);
-    // the two arches against the side walls: base 20 -> 27.5, top 62.5 -> 70, piers 7.5 wide
-    for (const [x0, x1, y0, y1] of [[-98, -48, -125, -109.7], [64, 114, 65, 80.3]]) {
-      bx(x0, x1, y0, y1, 20, 27.5);
-      bx(x0, x1, y0, y1, 62.5, 70);
-      bx(x0, x0 + 7.5, y0, y1, 27.5, 62.5);
-      bx(x1 - 7.5, x1, y0, y1, 27.5, 62.5);
-    }
-    // the two turned arches: a rectangle B -> C long, B -> A wide; piers 7.3 long at each end
-    for (const [B, C, A] of [
-      [[37.56, -101.02], [81.97, -81.12], [31.93, -86.31]],
-      [[-62.39, 14.38], [-17.98, 34.28], [-68.03, 29.09]],
-    ]) {
-      const L = Math.hypot(C[0] - B[0], C[1] - B[1]),
-        W = Math.hypot(A[0] - B[0], A[1] - B[1]);
-      const uv = [(C[0] - B[0]) / L, (C[1] - B[1]) / L],
-        vv = [(A[0] - B[0]) / W, (A[1] - B[1]) / W];
-      const poly = (u0, u1) => [
-        [B[0] + uv[0] * u0, B[1] + uv[1] * u0],
-        [B[0] + uv[0] * u1, B[1] + uv[1] * u1],
-        [B[0] + uv[0] * u1 + vv[0] * W, B[1] + uv[1] * u1 + vv[1] * W],
-        [B[0] + uv[0] * u0 + vv[0] * W, B[1] + uv[1] * u0 + vv[1] * W],
-      ];
-      // a staircase of boxes (2 model units wide in X) filling the convex polygon between two heights
-      const fill = (pl, z0, z1) => {
-        const xs = pl.map((p) => p[0]);
-        const lo = Math.min(...xs),
-          hi = Math.max(...xs);
-        for (let x = lo; x < hi - 1e-6; x += 2) {
-          const xa = x,
-            xb = Math.min(hi, x + 2),
-            xm = (xa + xb) / 2;
-          const ys = [];
-          for (let i = 0; i < 4; i++) {
-            const p = pl[i],
-              q = pl[(i + 1) % 4];
-            if ((p[0] - xm) * (q[0] - xm) <= 0 && p[0] !== q[0]) ys.push(p[1] + ((xm - p[0]) / (q[0] - p[0])) * (q[1] - p[1]));
-          }
-          if (ys.length >= 2) bx(xa, xb, Math.min(...ys), Math.max(...ys), z0, z1);
-        }
-      };
-      fill(poly(0, L), 20, 27.5);
-      fill(poly(0, L), 62.5, 70);
-      fill(poly(0, 7.3), 27.5, 62.5);
-      fill(poly(L - 7.3, L), 27.5, 62.5);
-    }
-    // the two steep ramps (solid wedges): A rises towards the middle of the map along model -Y, B along +Y
-    b.ramp(gx(-98.25), gz(102.58), gx(-52), gz(52.58), gy(20), gy(85), '+z', Object.assign({ bottom: gy(0) }, hid));
-    b.ramp(gx(66), gz(-111), gx(114.26), gz(-161), gy(20), gy(85), '-z', Object.assign({ bottom: gy(0) }, hid));
-
-    m.dummies = [
-      { x: gx(-30), y: 0, z: gz(-150), yaw: 0 },
-      { x: gx(40), y: 0, z: gz(100), yaw: Math.PI },
-    ];
-    // spawns: both ends behind the bars, four corners and the two side lanes (all on the floor)
-    for (const [sx, sy2] of [
-      [8, -155],
-      [8, 102],
-      [-75, -150],
-      [95, 100],
-      [50, -150],
-      [-35, 100],
-      [-80, -20],
-      [96, -30],
-    ]) b.spawn(gx(sx), 0, gz(sy2));
-    m.clouds = 6;
-    return m;
-  }
-
-  RV.maps = {
-    toybox: toybox(),
-    testarena: testArena(),
-    skybridge: skybridge(),
-    pinwheel: pinwheel(),
-    vertigo: vertigo(),
-    yard: yard(),
-    gauntlet: gauntlet(),
+  /** Add a map to the registry (used below, and by the archived maps-legacy.js). */
+  RV.registerMap = function (m, last) {
+    if (!m) return;
+    RV.maps[m.id] = m;
+    if (RV.mapOrder.indexOf(m.id) < 0) RV.mapOrder.splice(last ? RV.mapOrder.length : RV.mapOrder.indexOf('yard') >= 0 ? RV.mapOrder.indexOf('yard') : RV.mapOrder.length, 0, m.id);
+    // maps that support the 1v1 duel are also online 1v1 maps
+    if (m.modes.indexOf('duel') >= 0 && m.modes.indexOf('online') < 0) m.modes.push('online');
   };
-  RV.mapOrder = ['toybox', 'skybridge', 'pinwheel', 'vertigo', 'testarena', 'yard', 'gauntlet'];
-  // the four compact duel maps are also the online 1v1 maps
-  for (const id of RV.mapOrder) if (RV.maps[id].modes.indexOf('duel') >= 0 && RV.maps[id].modes.indexOf('online') < 0) RV.maps[id].modes.push('online');
+
+  RV.maps = {};
+  RV.mapOrder = [];
+  // the active pool, in menu order
+  RV.registerMap(
+    fromData('testarena', 'Arena', 'arena', {
+      desc: 'The duel arena: a walled rectangle of white panelled concrete. A long ramp leads to a high ledge on each side wall, a catwalk bridges the middle over a low plinth, turned slabs and a tall bar break the floor, and a hollowed gate hides each spawn.',
+      size: 'Compact',
+      sky: SKY.arena,
+      killY: -30,
+      navStep: 1.5, // a tight map: the bots walking graph needs a fine grid
+      clouds: 6,
+      meshColor: 0xa9aeb8,
+      swatch: [0xe9ebf0, 0xb4bbc8, 0x4a7bd6, 0xf0883a],
+    })
+  );
+  RV.registerMap(
+    fromData('bridge', 'Bridge', 'arena', {
+      desc: 'A raised bridge crosses a city intersection with a yellow bus stopped on its middle. Fight on the high deck, under it on the street, or cut across by the stairs. Parked cars, barriers and buildings with windows.',
+      size: 'Medium',
+      sky: SKY.city,
+      killY: -30,
+      navStep: 2.0,
+      clouds: 8,
+      swatch: [0x4b5160, 0xffc533, 0x9aa2ae, 0xe8d8c4],
+    })
+  );
+  RV.registerMap(
+    fromData('crossroads', 'Crossroads', 'meadow', {
+      desc: 'Two roads cross in an open field around a stepped stone monument. A stone fort and a warehouse (with their twins across the field) have windows, interiors and roofs; rock outcrops, hay and trees are the cover.',
+      size: 'Large',
+      sky: SKY.field,
+      killY: -30,
+      navStep: 2.5,
+      clouds: 12,
+      swatch: [0x7fcf6a, 0x555b66, 0xb9b3a6, 0xc7553d],
+    })
+  );
+  RV.registerMap(
+    fromData('docks', 'Docks', 'sunrise', {
+      desc: 'A waterfront cargo yard: container alleys, a gantry crane, a harbour office and a warehouse to fight through. The north edge and the piers are open water - fall in and you are out.',
+      size: 'Large',
+      sky: SKY.harbour,
+      killY: -5.5,
+      water: { y: -2.4, color: 0x2a86c8, opacity: 0.88 },
+      navStep: 2.0,
+      clouds: 9,
+      swatch: [0x2a86c8, 0xc0392b, 0xe67e22, 0xb8b5ad],
+    })
+  );
+  RV.registerMap(
+    fromData('station', 'Station', 'dusk', {
+      desc: 'A Western railway station: two steam trains with an island platform between them, a station hall and a depot with two floors each. Fight through the carriages, along the platform or inside the buildings.',
+      size: 'Large',
+      sky: SKY.western,
+      killY: -30,
+      navStep: 2.0,
+      clouds: 6,
+      swatch: [0xb23a32, 0x2f5d8a, 0xc89a63, 0xd9b77e],
+    })
+  );
+  RV.registerMap(
+    fromData('backrooms', 'Backrooms', 'sunrise', {
+      desc: 'An endless-looking office maze under buzzing lights: 4 m corridors, red carpet rooms, pool-tile rooms and a lit atrium with a raised platform in the middle. Corners everywhere, no sky.',
+      size: 'Medium',
+      sky: SKY.office,
+      killY: -30,
+      navStep: 1.6,
+      clouds: 0,
+      swatch: [0xd6c46a, 0x8e2b2b, 0x9fd8e0, 0x9c8a46],
+    })
+  );
+  // the practice field and the time trial course are not part of the duel pool
+  RV.registerMap(yard(), true);
+  RV.registerMap(gauntlet(), true);
+  RV.mapkit = { Builder, COL, PAL, SKY };
+
+  // The pictures (js/mesh-<id>.js, 130 - 850 KB each) are not part of the first page load: they are fetched in the background once the
+  // lobby is up, or on demand when a match on that map starts. A map whose picture cannot be fetched is still playable (its solids are
+  // drawn as plain boxes), and the loader never blocks or throws.
+  if (typeof document !== 'undefined') {
+    const loads = {};
+    const stamp = () => {
+      const s = document.querySelector('script[src*="js/maps.js"]');
+      const q = s && s.src.indexOf('?') >= 0 ? s.src.slice(s.src.indexOf('?')) : '';
+      return q;
+    };
+    /** Promise<boolean>: the mesh of map `id` is available (true) or could not be loaded (false). */
+    RV.loadMeshes = function (id) {
+      const m = RV.maps[id];
+      if (!m || !m.mesh || (RV.meshes && RV.meshes[m.mesh])) return Promise.resolve(true);
+      if (!loads[m.mesh]) {
+        loads[m.mesh] = new Promise((res) => {
+          const el = document.createElement('script');
+          el.src = 'js/mesh-' + m.mesh + '.js' + stamp();
+          el.onload = () => res(!!(RV.meshes && RV.meshes[m.mesh]));
+          el.onerror = () => res(false);
+          document.head.appendChild(el);
+        });
+      }
+      return loads[m.mesh];
+    };
+    /** Quietly fetch every map's picture, one at a time. */
+    RV.preloadMeshes = async function () {
+      for (const id of RV.mapOrder) {
+        await RV.loadMeshes(id);
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    };
+  }
   RV.COL = COL;
 })();

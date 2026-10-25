@@ -2,6 +2,7 @@ server
 docs
 _archive
 _models
+tools
 Dockerfile
 .dockerignore
 .gitignore

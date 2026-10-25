@@ -14,8 +14,8 @@
  * peer-to-peer fallback: online play needs the real backend (see docs/ONLINE_BACKEND.md).
  */
 window.DASHDUEL_CONFIG = {
-  SERVER_URL: 'wss://dashduel-server.onrender.com/ws', // the deployed game server (Render)
+  SERVER_URL: 'wss://server.sciencerevisions.online/ws', // the deployed game server
   SAME_ORIGIN_SERVER: false, // true when the game server also serves these files (SERVE_STATIC=1 hosting)
   LOCAL_SERVER_URL: 'ws://localhost:8787/ws',
-  PROTOCOL: 2, // must equal the server's protocol number
+  PROTOCOL: 3, // must equal the server's protocol number
 };

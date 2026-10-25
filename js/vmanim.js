@@ -51,19 +51,209 @@
    *   lhMag   : where the supporting hand travels to for a magazine change (view units)
    */
   const SPEC = {
-    rifle: { scale: 0.5, hip: [0.16, -0.138, -0.4], sight: [0, 0.1, 0.11], er: 0.4, muzzle: [0, 0.015, -0.62], eject: [0.04, 0.05, 0.03], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
-    pistol: { scale: 0.62, hip: [0.145, -0.122, -0.38], sight: [0, 0.088, 0.095], er: 0.36, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.062, -0.01], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
+    // hip poses follow the RIVALS first-person view (solved from its reference screenshots: tools/solve-hip-pose.js): the gun sits low on the
+    // right, big, and its muzzle points in towards the crosshair (hipYaw / hipPitch, blended out while aiming), the muzzle ends up
+    // just right of and below the crosshair so the centre of the screen stays clear
+    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1, -0.41], scale: 0.6, hip: [0.15, -0.127, -0.44], hipYaw: 0.082, hipPitch: 0.17, sight: [0, 0.1, 0.11], er: 0.44, erCentre: 0.34, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
+    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.094, -0.111, -0.403], hipYaw: 0.212, hipPitch: 0.3, sight: [0, 0.082, 0.095], er: 0.36, erCentre: 0.31, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
     fists: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'punch', reload: 'none', sprintPose: 0.6, cas: null, noAds: true },
     grenade: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'throw', reload: 'none', sprintPose: 0.7, cas: null, noAds: true },
   };
 
-  /** Root position (camera space) that puts the sight aperture dead centre. */
+  /**
+   * How far the gun is turned while aiming (radians). Default: the gun is held to the right of the view and turned in so its FRONT
+   * SIGHT sits exactly on the crosshair (the rear sight is a little to the right of it, you see the side of the gun). With the
+   * "centre the rear sight" setting the gun points straight down the view and the rear sight hole is on the crosshair.
+   */
+  function adsYaw(spec) {
+    return RV.settings && RV.settings.adsCentre ? 0 : spec.adsYaw || 0;
+  }
+
+  /** Distance from the eye to the rear sight while aiming (metres): further away when the gun is held to the side, closer when centred. */
+  function eyeRelief(spec) {
+    return RV.settings && RV.settings.adsCentre && spec.erCentre ? spec.erCentre : spec.er;
+  }
+
+  /**
+   * Root position (camera space) of a fully aimed gun: the rear sight `er` metres from the eye, the front sight on the line through
+   * the crosshair (x = 0, y = 0) whatever the yaw. (The shot itself always leaves through the crosshair; this only places the gun.)
+   */
   function adsPos(spec, out) {
     const s = spec.scale;
     out = out || [0, 0, 0];
-    out[0] = -s * spec.sight[0];
-    out[1] = -s * spec.sight[1];
-    out[2] = -spec.er - s * spec.sight[2];
+    const post = spec.post || spec.sight,
+      psi = adsYaw(spec),
+      c = Math.cos(psi),
+      sn = Math.sin(psi);
+    out[0] = -s * (post[0] * c + post[2] * sn);
+    out[1] = -s * post[1];
+    out[2] = -eyeRelief(spec) - s * (-spec.sight[0] * sn + spec.sight[2] * c);
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // CAMERA-DRIVEN ADS
+  //
+  // The first-person weapon is drawn by its own camera, in camera space. Sliding the gun from its low hip position to the middle of the
+  // screen over a still world looks like a gun floating across the picture. Instead the VIEW does most of the work: while aiming, the
+  // player's camera turns toward the weapon's sight (the world pans, the gun stays where it is relative to it), and the gun itself only
+  // makes the small remaining adjustment (closer / a touch lower or inward) that gives the exact sight picture.
+  //
+  //   rig frame     = the frame the gun lives in (the player's look direction when NOT aiming); the gun's pose is blended hip -> ADS here
+  //   camera turn   = R_c(ae) = Ry(ae * dpsi) * Rx(ae * dtheta): the extra yaw / pitch the camera has while aiming (ae = eased ADS progress)
+  //   camera space  = R_c^-1 * rig pose: what the viewmodel camera finally sees
+  //
+  // dpsi / dtheta come from the weapon's real sight anchor (spec.post, else spec.sight) in the hip pose: the angle between that point and
+  // the middle of the screen, times the weapon's share (spec.camShare) times the player's "camera pull" setting. The rig-frame ADS pose is
+  // then DEFINED as R_c * (the exact sight-picture pose in camera space), so at full ADS the front sight is exactly on the crosshair
+  // whatever the share is (share 0 = the old behaviour: the gun does everything). Everything here is computed from the spec once.
+  // The game (modes.js) applies the same turn to the player's yaw / pitch as an increment, so mouse look is never fought and the shot
+  // follows the crosshair.
+  // ---------------------------------------------------------------------------
+  const M1 = new Array(9),
+    M2 = new Array(9),
+    M3 = new Array(9);
+  /** three.js 'XYZ' Euler (M = Rx * Ry * Rz) -> row-major 3x3 */
+  function eulerM(x, y, z, m) {
+    const a = Math.cos(x),
+      b = Math.sin(x),
+      c = Math.cos(y),
+      d = Math.sin(y),
+      e = Math.cos(z),
+      f = Math.sin(z);
+    const ae = a * e,
+      af = a * f,
+      be = b * e,
+      bf = b * f;
+    m[0] = c * e;
+    m[1] = -c * f;
+    m[2] = d;
+    m[3] = af + be * d;
+    m[4] = ae - bf * d;
+    m[5] = -b * c;
+    m[6] = bf - ae * d;
+    m[7] = be + af * d;
+    m[8] = a * c;
+    return m;
+  }
+  /** row-major 3x3 -> three.js 'XYZ' Euler angles (into out[0..2]) */
+  function mEuler(m, out) {
+    const m13 = m[2] < -1 ? -1 : m[2] > 1 ? 1 : m[2];
+    out[1] = Math.asin(m13);
+    if (Math.abs(m13) < 0.9999999) {
+      out[0] = Math.atan2(-m[5], m[8]);
+      out[2] = Math.atan2(-m[1], m[0]);
+    } else {
+      out[0] = Math.atan2(m[7], m[4]);
+      out[2] = 0;
+    }
+    return out;
+  }
+  function mMul(a, b, o) {
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+    return o;
+  }
+  /** camera rotation Ry(psi) * Rx(theta) (the camera's own yaw / pitch order) */
+  function camM(psi, theta, o) {
+    const cy = Math.cos(psi),
+      sy = Math.sin(psi),
+      cx = Math.cos(theta),
+      sx = Math.sin(theta);
+    // Ry = [[cy,0,sy],[0,1,0],[-sy,0,cy]]  Rx = [[1,0,0],[0,cx,-sx],[0,sx,cx]]
+    o[0] = cy;
+    o[1] = sy * sx;
+    o[2] = sy * cx;
+    o[3] = 0;
+    o[4] = cx;
+    o[5] = -sx;
+    o[6] = -sy;
+    o[7] = cy * sx;
+    o[8] = cy * cx;
+    return o;
+  }
+  const mT = (m, o) => {
+    o[0] = m[0];
+    o[1] = m[3];
+    o[2] = m[6];
+    o[3] = m[1];
+    o[4] = m[4];
+    o[5] = m[7];
+    o[6] = m[2];
+    o[7] = m[5];
+    o[8] = m[8];
+    return o;
+  };
+
+  /** The weapon's anchor the camera aligns with: the front sight (post) if it has one, else the rear sight. */
+  function sightAnchor(spec) {
+    return spec.post || spec.sight;
+  }
+
+  /** Where the sight anchor is, in camera space, for a root position `pos` and Euler `rot` (tests / tooling too). */
+  function anchorAt(spec, pos, rot, out) {
+    const m = eulerM(rot[0], rot[1], rot[2], M1),
+      a = sightAnchor(spec),
+      s = spec.scale;
+    out = out || [0, 0, 0];
+    out[0] = pos[0] + s * (m[0] * a[0] + m[1] * a[1] + m[2] * a[2]);
+    out[1] = pos[1] + s * (m[3] * a[0] + m[4] * a[1] + m[5] * a[2]);
+    out[2] = pos[2] + s * (m[6] * a[0] + m[7] * a[1] + m[8] * a[2]);
+    return out;
+  }
+
+  /**
+   * The camera-driven ADS numbers for a weapon (cached; recomputed when the spec or the settings change):
+   *   dpsi / dtheta   the camera's extra yaw / pitch (radians, three.js convention: + yaw turns LEFT, + pitch looks UP) at full ADS
+   *   px,py,pz rx,ry,rz   the gun's pose in the rig frame at full ADS
+   *   off  {right, up}   angle of the hip-pose sight from the middle of the screen (radians), for tests
+   */
+  function adsCamera(spec) {
+    const S = RV.settings || {};
+    const pull = S.adsPull == null ? 1 : S.adsPull;
+    const share = Math.max(0, Math.min(1, spec.camShare == null ? 0.75 : spec.camShare)) * Math.max(0, Math.min(1, pull));
+    const hip = spec.hip;
+    const an = sightAnchor(spec);
+    const key =
+      share * 977 + (S.adsCentre ? 1 : 0) * 331 + spec.er * 53 + (spec.erCentre || 0) * 59 + (spec.adsYaw || 0) * 61 + spec.scale * 67 +
+      hip[0] * 71 + hip[1] * 73 + hip[2] * 79 + (spec.hipYaw || 0) * 83 + (spec.hipPitch || 0) * 89 + an[0] * 97 + an[1] * 101 + an[2] * 103 + spec.sight[2] * 107;
+    const c = spec._cam;
+    if (c && c.key === key) return c;
+    const out = c || (spec._cam = {});
+    out.key = key;
+    out.share = share;
+    // the hip pose's sight point -> its angle from the middle of the screen
+    const hs = anchorAt(spec, hip, [spec.hipPitch || 0, spec.hipYaw || 0, 0], [0, 0, 0]);
+    const right = Math.atan2(hs[0], -hs[2]),
+      up = Math.atan2(hs[1], Math.hypot(hs[0], hs[2]));
+    out.off = { right, up };
+    out.dpsi = -right * share; // turning right = a smaller (more negative) yaw
+    out.dtheta = up * share;
+    // the exact sight-picture pose in camera space (front sight on the crosshair) ...
+    const pa = adsPos(spec, [0, 0, 0]);
+    const mc = eulerM(0, adsYaw(spec), 0, M1);
+    // ... expressed in the rig frame: pose_rig = R_c * pose_cam
+    const rc = camM(out.dpsi, out.dtheta, M2);
+    out.px = rc[0] * pa[0] + rc[1] * pa[1] + rc[2] * pa[2];
+    out.py = rc[3] * pa[0] + rc[4] * pa[1] + rc[5] * pa[2];
+    out.pz = rc[6] * pa[0] + rc[7] * pa[1] + rc[8] * pa[2];
+    const e = mEuler(mMul(rc, mc, M3), [0, 0, 0]);
+    out.rx = e[0];
+    out.ry = e[1];
+    out.rz = e[2];
+    return out;
+  }
+
+  /** The camera turn (yaw / pitch offsets to add to the player's look) for weapon `id` at ADS progress `ae`. */
+  function adsCamAngles(id, ae, out) {
+    out = out || { yaw: 0, pitch: 0 };
+    const spec = SPEC[id];
+    if (!spec || spec.noAds || !(ae > 0)) {
+      out.yaw = out.pitch = 0;
+      return out;
+    }
+    const c = adsCamera(spec);
+    out.yaw = c.dpsi * ae;
+    out.pitch = c.dtheta * ae;
     return out;
   }
 
@@ -334,19 +524,42 @@
       rx += -0.95 * lower;
       x += 0.07 * lower;
 
-      // --- final root pose: hip position blended with the ADS position ------------
+      // --- final root pose: hip pose blended with the ADS pose IN THE RIG FRAME, then seen through the turned camera ----------------
       const hip = shownSpec.hip;
-      const ap = adsPos(shownSpec, this._ap || (this._ap = [0, 0, 0]));
       const ae = shownSpec.noAds ? 0 : a; // only weapons with sights can aim
       o.id = shown;
-      o.x = hip[0] + (ap[0] - hip[0]) * ae + x;
-      o.y = hip[1] + (ap[1] - hip[1]) * ae + y;
-      o.z = hip[2] + (ap[2] - hip[2]) * ae + z;
-      o.rx = rx;
-      o.ry = ry;
-      o.rz = rz;
       o.lower = lower;
       o.ads = ae;
+      o.camYaw = 0;
+      o.camPitch = 0;
+      if (ae > 0.0001) {
+        const cm = adsCamera(shownSpec);
+        const px = hip[0] + (cm.px - hip[0]) * ae + x,
+          py = hip[1] + (cm.py - hip[1]) * ae + y,
+          pz = hip[2] + (cm.pz - hip[2]) * ae + z;
+        // the gun is shouldered: at the hip its muzzle points in towards the crosshair; aiming blends to the sight-picture orientation
+        const rx2 = rx + (shownSpec.hipPitch || 0) * (1 - ae) + cm.rx * ae,
+          ry2 = ry + (shownSpec.hipYaw || 0) * (1 - ae) + cm.ry * ae,
+          rz2 = rz + cm.rz * ae;
+        // the camera has turned by ae * (dpsi, dtheta): the gun in camera space is R_c^-1 * (rig pose)
+        o.camYaw = cm.dpsi * ae;
+        o.camPitch = cm.dtheta * ae;
+        const ci = mT(camM(o.camYaw, o.camPitch, M1), M2);
+        o.x = ci[0] * px + ci[1] * py + ci[2] * pz;
+        o.y = ci[3] * px + ci[4] * py + ci[5] * pz;
+        o.z = ci[6] * px + ci[7] * py + ci[8] * pz;
+        const e = mEuler(mMul(ci, eulerM(rx2, ry2, rz2, M3), M1), this._eul || (this._eul = [0, 0, 0]));
+        o.rx = e[0];
+        o.ry = e[1];
+        o.rz = e[2];
+      } else {
+        o.x = hip[0] + x;
+        o.y = hip[1] + y;
+        o.z = hip[2] + z;
+        o.rx = rx + (shownSpec.hipPitch || 0);
+        o.ry = ry + (shownSpec.hipYaw || 0);
+        o.rz = rz;
+      }
 
       // --- hands ------------------------------------------------------------------------
       const lh = o.lh,
@@ -368,6 +581,9 @@
         lh.y = lm[1] * r + rl.magY * shownSpec.scale - 0.09 * rl.dip;
         lh.z = lm[2] * r;
         lh.rx = -0.25 * r;
+        // aiming: the supporting forearm tips down out of the sight picture (the hand stays on the handguard)
+        lh.rx += 0.42 * ae * (1 - r);
+        lh.rz += 0.1 * ae * (1 - r);
       }
 
       // --- moving parts ----------------------------------------------------------------
@@ -555,5 +771,5 @@
 
   }
 
-  RV.vmanim = { SPEC, Animator, adsPos, stepAds, reloadPose, seg, smooth, pulse, THROW, PUNCH };
+  RV.vmanim = { SPEC, Animator, adsPos, adsYaw, eyeRelief, adsCamera, adsCamAngles, anchorAt, stepAds, reloadPose, seg, smooth, pulse, THROW, PUNCH };
 })();

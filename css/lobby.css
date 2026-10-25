@@ -1,0 +1,111 @@
+/* DASHDUEL - 3D lobby interface (js/lobby.js). Sits on top of the lobby drawn on the canvas.
+   Layout: ONE tall side panel on the left (brand, player, server status, the five zone buttons as a vertical list, and under them
+   what the focused zone offers); the 3D plaza fills the rest of the window and the camera shifts to the right of the panel.
+   Same Arcade look as the rest of the game (navy glass, cyan accent, chamfered corners). Cheap on purpose: no blur, no filters.
+   Without <html class="lobby3d"> the classic menu shows instead (3D lobby off in Settings, or it could not load). */
+
+.lobby-ui { display: none; }
+html.lobby3d #scr-main { background: transparent; pointer-events: none; padding: 0; overflow: hidden; }
+html.lobby3d #scr-main::before { display: none; }
+html.lobby3d #scr-main .menu-grid, html.lobby3d #scr-main > .layout-switch { display: none !important; }
+html.lobby3d #scr-main > .lobby-ui { display: block; position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+html.lobby3d .lobby-ui > * { pointer-events: auto; }
+html.lobby3d .lobby-ui > .lb-name3d, html.lobby3d .lobby-ui > .lb-tip { pointer-events: none; }
+
+/* the other screens float over the lobby instead of hiding it */
+html.lobby3d #scr-select, html.lobby3d #scr-settings, html.lobby3d #scr-records, html.lobby3d #scr-help,
+html.lobby3d #scr-loadout, html.lobby3d #scr-queue, html.lobby3d #scr-name { background: rgba(5, 8, 20, 0.6); }
+
+/* ------------------------------------------------------------------ the side panel */
+.lb-side { position: absolute; left: 18px; top: 16px; bottom: 16px; width: 336px; display: flex; flex-direction: column; gap: 10px; padding: 18px 16px 14px; background: linear-gradient(180deg, rgba(10, 16, 36, .94), rgba(8, 12, 28, .9)); border: 1px solid var(--line2); border-left: 3px solid var(--acc); overflow: hidden; }
+.lb-side .brand { margin: 0 0 2px; }
+.lb-who { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--tx2); }
+.lb-who b { color: var(--tx); font-size: 17px; letter-spacing: 1.5px; }
+.lb-who .chip { padding: 3px 9px; font-size: 10px; margin-left: auto; }
+.lb-status { display: flex; align-items: center; gap: 8px; font-size: 11.5px; line-height: 1.35; color: var(--tx2); padding: 6px 10px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); }
+.lb-status .dot, .lb-conn .dot { width: 9px; height: 9px; border-radius: 50%; background: #aab6d6; flex: none; }
+.lb-status[data-state="ok"] .dot, .lb-conn[data-state="ok"] .dot { background: #3ee08a; box-shadow: 0 0 8px #3ee08a; }
+.lb-status[data-state="down"] .dot, .lb-conn[data-state="down"] .dot { background: #ff5a4d; }
+.lb-status[data-state="none"] .dot, .lb-conn[data-state="none"] .dot { background: #ffc83d; }
+.lb-status[data-state="checking"] .dot, .lb-conn[data-state="checking"] .dot { animation: lbpulse 1s ease-in-out infinite; }
+@keyframes lbpulse { 50% { opacity: .25; } }
+
+/* the five zones, as a vertical list; PLAY is the big one */
+.lb-dock { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.lb-dock button { font: inherit; color: var(--tx); background: var(--raise); border: 1px solid var(--line); padding: 9px 12px; cursor: pointer; display: grid; grid-template-columns: 22px 1fr; column-gap: 10px; align-items: center; text-align: left; transition: background .1s, border-color .1s, transform .1s; }
+.lb-dock kbd { grid-row: 1 / 3; font-family: var(--mono); font-size: 11px; color: var(--tx3); border: 1px solid var(--line2); padding: 1px 0; text-align: center; background: transparent; }
+.lb-dock b { font-size: 14px; letter-spacing: 2px; text-transform: uppercase; }
+.lb-dock span { font-size: 10.5px; color: var(--tx3); letter-spacing: .4px; }
+.lb-dock button:not(:first-child) span { display: none; }
+.lb-dock button:not(:first-child) { padding: 8px 12px; }
+.lb-dock button:first-child { padding: 13px 12px; background: linear-gradient(90deg, var(--acc), #19a8d6); color: var(--on-acc); border-color: var(--acc); }
+.lb-dock button:first-child b { font-size: 22px; letter-spacing: 4px; }
+.lb-dock button:first-child span, .lb-dock button:first-child kbd { color: rgba(4, 20, 26, .75); border-color: rgba(4, 20, 26, .4); }
+.lb-dock button:hover, .lb-dock button:focus-visible, .lb-dock button.hot { border-color: var(--acc-line); background: var(--raise2); outline: 0; transform: translateX(3px); }
+.lb-dock button:first-child:hover, .lb-dock button:first-child:focus-visible, .lb-dock button:first-child.hot { background: linear-gradient(90deg, var(--acc-hover), #2bbbe4); }
+.lb-dock button.on { border-color: var(--acc); background: var(--acc-dim); box-shadow: inset 3px 0 0 var(--acc); }
+.lb-dock button:first-child.on { background: linear-gradient(90deg, var(--acc-hover), #2bbbe4); box-shadow: 0 0 0 2px rgba(25, 211, 243, .35); }
+
+/* what the focused zone offers: fills the rest of the panel */
+.lb-card { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 12px 2px 4px; border-top: 1px solid var(--line); }
+.lb-card h3 { margin: 0 0 10px; font-size: 19px; letter-spacing: 3px; text-transform: uppercase; font-weight: 700; }
+.lb-card .eyebrow { margin: 12px 0 7px; }
+.lb-card .eyebrow:first-child { margin-top: 0; }
+.lb-note { color: var(--tx3); font-size: 12px; line-height: 1.55; margin: 0 0 10px; }
+.lb-big { width: 100%; display: block; text-align: left; font: inherit; color: var(--on-acc); background: var(--amber); border: 0; padding: 12px 14px; cursor: pointer; margin-bottom: 9px; }
+.lb-big b { display: block; font-size: 16px; letter-spacing: 2px; text-transform: uppercase; }
+.lb-big small { display: block; font-size: 11px; letter-spacing: .8px; opacity: .8; margin-top: 2px; }
+.lb-big:hover, .lb-big:focus-visible { filter: brightness(1.1); outline: 0; }
+.lb-row { width: 100%; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; text-align: left; font: inherit; color: var(--tx); background: var(--raise); border: 1px solid var(--line); padding: 9px 11px; margin-bottom: 5px; cursor: pointer; }
+.lb-row b { font-size: 12.5px; letter-spacing: 1.5px; text-transform: uppercase; }
+.lb-row small { font-size: 10.5px; color: var(--tx3); }
+.lb-row:hover, .lb-row:focus-visible { border-color: var(--acc-line); background: var(--raise2); outline: 0; }
+.lb-row.sel { border-color: var(--acc); background: var(--acc-dim); }
+.lb-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.lb-mode { font: inherit; color: var(--tx); background: var(--raise); border: 1px solid var(--line); padding: 8px 6px; cursor: pointer; text-align: center; min-width: 0; }
+.lb-mode b { display: block; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; }
+.lb-mode small { display: block; font-size: 9.5px; color: var(--tx3); margin-top: 3px; line-height: 1.25; }
+.lb-mode:hover, .lb-mode:focus-visible { border-color: var(--acc-line); background: var(--raise2); outline: 0; }
+.lb-link { font: inherit; font-size: 11px; color: var(--acc); background: none; border: 0; cursor: pointer; padding: 2px 4px; text-decoration: underline; }
+.lb-link.wide { display: block; margin-top: 6px; }
+.lb-conn { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--tx2); margin: 0 0 8px; flex-wrap: wrap; }
+.lb-conn .lb-link { margin-left: auto; }
+.lb-check { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--tx2); margin-top: 10px; cursor: pointer; line-height: 1.5; }
+.lb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 10px; }
+.lb-stats div { background: var(--raise); border: 1px solid var(--line); padding: 7px; text-align: center; }
+.lb-stats b { display: block; font-size: 19px; font-family: var(--mono); }
+.lb-stats span { font-size: 9.5px; color: var(--tx3); letter-spacing: 1px; text-transform: uppercase; }
+.lb-links { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.lb-links .chip { flex: 1; text-align: center; padding: 7px 6px; font-size: 11px; }
+
+.lb-name3d { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity .2s; text-align: center; white-space: nowrap; }
+.lb-name3d b { display: block; font-size: 15px; letter-spacing: 2px; padding: 3px 12px; background: var(--glass3); border: 1px solid var(--acc-line); }
+.lb-name3d span { display: inline-block; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--tx2); background: var(--glass3); padding: 1px 8px; }
+.lb-tip { position: absolute; left: 0; top: 0; opacity: 0; font-size: 12px; letter-spacing: .5px; padding: 5px 10px; background: var(--glass3); border: 1px solid var(--line2); white-space: nowrap; transition: opacity .1s; }
+.lb-tip.on { opacity: 1; }
+
+@media (max-height: 780px) { .lb-note { display: none; } .lb-side { gap: 7px; padding-top: 12px; } .lb-card h3 { margin-bottom: 7px; } }
+
+/* match transition: the canvas fades in when a match starts */
+html.entering #game { animation: lbfade .45s ease-out; }
+@keyframes lbfade { from { opacity: 0; } to { opacity: 1; } }
+html.potato .lb-status .dot { animation: none; }
+html.potato.entering #game { animation: none; }
+
+/* "Loading map..." while a map's picture is fetched on demand */
+#map-loading { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(5, 8, 20, .72); color: var(--tx); font-size: 20px; letter-spacing: 4px; text-transform: uppercase; }
+#map-loading.hidden { display: none; }
+
+/* narrow windows: the panel becomes a sheet along the bottom (zone list as a row, details above it) */
+@media (max-width: 1100px) {
+  .lb-side { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; max-height: 56vh; padding: 10px 10px 8px; gap: 6px; border-left-width: 1px; border-top: 3px solid var(--acc); }
+  .lb-side .brand, .lb-who span { display: none; }
+  .lb-who { order: -1; }
+  .lb-dock { flex-direction: row; order: 2; margin-top: 0; }
+  .lb-dock button { flex: 1; grid-template-columns: 1fr; padding: 8px 4px; text-align: center; }
+  .lb-dock button:first-child { padding: 8px 4px; }
+  .lb-dock button:first-child b { font-size: 15px; letter-spacing: 2px; }
+  .lb-dock span, .lb-dock kbd { display: none; }
+  .lb-card { order: 1; max-height: 24vh; }
+  .lb-links { order: 3; }
+}

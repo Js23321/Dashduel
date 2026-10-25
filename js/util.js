@@ -71,6 +71,32 @@
     },
   };
 
+  /**
+   * Pick the two spawn points of a round (shared by the offline duel and the online server): one at random that was NOT used in the last
+   * round or two, and a partner from the far end of the map (any of the points at least 80% as far away as the furthest one, also avoiding
+   * recent ones), so consecutive rounds start in different places but never next to each other. `recent` is a list of spawn indices that
+   * this function keeps up to date; `rnd` is Math.random (or any 0..1 generator). Returns [a, b] (indices into `spawns`).
+   */
+  RV.pickSpawnPair = function (spawns, recent, rnd) {
+    const n = spawns.length;
+    if (n < 2) return [0, 0];
+    rnd = rnd || Math.random;
+    const fresh = [];
+    for (let i = 0; i < n; i++) if (recent.indexOf(i) < 0) fresh.push(i);
+    const poolA = fresh.length >= 2 ? fresh : Array.from({ length: n }, (_, i) => i);
+    const a = poolA[Math.floor(rnd() * poolA.length)];
+    const dist = (i) => Math.hypot(spawns[i].x - spawns[a].x, spawns[i].z - spawns[a].z, (spawns[i].y - spawns[a].y) * 0.5);
+    let max = 0;
+    for (let i = 0; i < n; i++) if (i !== a) max = Math.max(max, dist(i));
+    let far = [];
+    for (let i = 0; i < n; i++) if (i !== a && dist(i) >= max * 0.8 && recent.indexOf(i) < 0) far.push(i);
+    if (!far.length) for (let i = 0; i < n; i++) if (i !== a && dist(i) >= max * 0.8) far.push(i);
+    const b = far[Math.floor(rnd() * far.length)];
+    recent.push(a, b);
+    while (recent.length > Math.min(4, n - 2)) recent.shift(); // remember the last two rounds' points
+    return [a, b];
+  };
+
   /** Tiny event emitter. */
   RV.Emitter = class {
     constructor() {

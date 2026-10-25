@@ -236,7 +236,7 @@ test('after a match both players can leave the rematch screen; leaving tells the
 test('information protection: a hidden opponent is not replicated (no coordinates), a visible one is', async () => {
   // behind a wall: the other player's position never reaches the client
   let m;
-  const bp = ['toybox', 'skybridge', 'pinwheel', 'vertigo'].some((id) => hiddenPair(id));
+  const bp = CFG.MAPS.some((id) => hiddenPair(id));
   let tested = false;
   for (let tries = 0; tries < 12 && bp && !tested; tries++) {
     m = await liveMatch(srv);
@@ -308,7 +308,7 @@ test('information protection: a grenade thrown from out of sight does not reveal
 });
 
 test('visibility has margin: an opponent about to come around a corner is already replicated (no pop-in)', async () => {
-  const room = S.worldFor('toybox');
+  const room = S.worldFor('testarena');
   // geometry check of the rule itself: from a spot with a clear line the look-ahead and hold-time keep the opponent visible
   const m = await liveMatch(srv);
   const open = openPair(m.map, 6);

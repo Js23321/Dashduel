@@ -18,7 +18,7 @@ where the server is with one setting. Practice, Duel, Deathmatch and Time Trial 
 |---|---|---|---|
 | State | Stateless: every room/queue/health value goes through an external store on every message | In-process rooms (good) | In-process rooms (a 1v1 room is a few KB) |
 | 120 Hz physics + 30 Hz snapshots + grenade/round timers | No process to run a tick | Yes | Yes (`setInterval` tick, movement stepped at 120 Hz) |
-| Runs the **same** physics as the browser | Would have to ship the game files into the function runtime | Needs a TypeScript/bundler pipeline to share `js/player.js` (classic scripts, not modules) | **Loads `js/{util,collision,maps,player,weapondata,grensim,netproto}.js` unchanged**, so prediction and the authority cannot drift apart |
+| Runs the **same** physics as the browser | Would have to ship the game files into the function runtime | Needs a TypeScript/bundler pipeline to share `js/player.js` (classic scripts, not modules) | **Loads `js/{util,collision,maps,player,weapondata,grensim,netproto}.js` and every `js/mapdata-*.js` (the collision + spawns of the maps made in Blender) unchanged**, so prediction and the authority cannot drift apart |
 | Build step / dependencies | Cloud-specific tooling | npm, TypeScript, schema classes | None. `node server/server.js` |
 | Already tested | n/a | Rewrite + re-test | 81 automated tests + real-browser end-to-end runs |
 

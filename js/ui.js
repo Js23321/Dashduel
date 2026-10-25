@@ -41,7 +41,7 @@
     $('btn-fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
     const online = !!(g.modeImpl && g.modeImpl.realtime);
     $('btn-restart').classList.toggle('hidden', online); // a live online match cannot be restarted
-    $('btn-quit').textContent = online ? 'Leave match (forfeit)' : 'Quit to menu';
+    $('btn-quit').textContent = online ? 'Leave match (forfeit)' : 'Return to lobby';
     $('pause-title').textContent = online ? 'Menu (match still running)' : 'Match paused';
     UI.settingsOpenFromPause = false;
     UI.loadoutFromPause = false;
@@ -59,7 +59,8 @@
   UI.focusFirst = function () {
     const scr = UI.current && $('scr-' + UI.current);
     if (!scr) return;
-    const el = scr.querySelector('[data-autofocus]') || scr.querySelector('.card.sel, .lo-card.sel') || UI.focusables()[0];
+    const vis = (e) => e.offsetParent !== null;
+    const el = Array.from(scr.querySelectorAll('[data-autofocus]')).find(vis) || scr.querySelector('.card.sel, .lo-card.sel') || UI.focusables()[0];
     if (el && el.focus) el.focus({ preventScroll: true });
   };
 
@@ -111,6 +112,25 @@
       e.preventDefault();
       t.click();
     }
+  };
+
+  // ---------------------------------------------------------------- entry points (the 3D lobby and the classic menu both use these)
+  /** Online 1v1 goes to the matchmaking queue (asking for a name first); every other mode picks its map first. */
+  UI.launch = function (mode) {
+    if (mode === 'online') UI.requireName(() => UI.startQueue());
+    else UI.openSelect(mode);
+  };
+
+  /** Start a game right away with the saved options. */
+  UI.quickStart = function (mode, map) {
+    RV.audio.init();
+    if (RV.settings.fullscreen) RV.enterFullscreen();
+    RV.game.start(mode, map, {
+      bots: RV.settings.botCount,
+      diff: RV.settings.difficulty,
+      kills: RV.settings.killLimit,
+      duelTo: RV.settings.duelTo,
+    });
   };
 
   // ---------------------------------------------------------------- map select
@@ -250,9 +270,11 @@
       body.appendChild(row('Mouse sensitivity', 'Look speed (applies to mouse and trackpad)', slider('sens', 0.1, 4, 0.05, (v) => (+v).toFixed(2))));
       body.appendChild(row('Invert Y axis', '', check('invertY')));
       body.appendChild(row('Auto bunny-hop', 'Hold Space to keep hopping the instant you land', check('autoHop')));
-      body.appendChild(row('Always sprint', 'Sprint by default; the Sprint key then walks', check('alwaysSprint')));
       body.appendChild(row('Mouse wheel switches weapons', 'Handy when Ctrl+number would switch browser tabs', check('wheelSwitch')));
       body.appendChild(row('Aim down sights', 'Hold = keep the right mouse button down. Toggle = click once to aim, again to stop', select('adsToggle', [['false', 'Hold'], ['true', 'Toggle']], (v) => v === 'true')));
+      body.appendChild(row('Centre the sights while aiming', 'On (default): the gun is centred and the hole of the rear sight sits dead on the crosshair, like looking through the sights. Off: the gun stays to the right and turns in, so its front sight is on the crosshair and you see the side of the gun. Shots always go through the crosshair', check('adsCentre')));
+      body.appendChild(row('ADS zoom', 'How far the view zooms in while aiming (100% = each weapon\'s own zoom: rifle about 1.7x, handgun about 1.4x). Look speed is scaled with it so aiming stays 1:1', slider('adsZoom', 0, 2, 0.1, (v) => Math.round(v * 100) + '%')));
+      body.appendChild(row('ADS camera pull', 'While aiming, the view turns toward the weapon\'s sights so the gun hardly slides across the screen. 100% = each weapon\'s own amount, 0% = the gun does all the moving (the view never turns). The shot always leaves through the crosshair', slider('adsPull', 0, 1, 0.05, (v) => Math.round(v * 100) + '%')));
       body.appendChild(row('ADS sensitivity', 'Look speed multiplier while aiming', slider('adsSens', 0.3, 1.6, 0.05, (v) => (+v).toFixed(2) + 'x')));
       body.appendChild(row('Scale look speed with zoom', 'Keeps aiming 1:1 with how far the view is zoomed in', check('scopeSens')));
       body.appendChild(row('Results screen after matches', 'Off (default): the next duel / deathmatch starts automatically with the mouse still locked', check('resultsScreen')));
@@ -333,7 +355,7 @@
       // one-click presets (Low is tuned for weak Chromebooks)
       const presets = document.createElement('div');
       presets.className = 'presets';
-      for (const [q, label] of [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']]) {
+      for (const [q, label] of [['potato', 'Potato'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['cinematic', 'Cinematic']]) {
         const b = document.createElement('button');
         b.dataset.q = q;
         b.textContent = label;
@@ -345,8 +367,9 @@
         });
         presets.appendChild(b);
       }
-      body.appendChild(row('Graphics quality', 'Low: 60% resolution, no shadows, fewer particles (weapon animations stay). Medium: 85%. High: full resolution + soft shadows. ' + (S.quality === 'custom' ? '(Custom: you changed a setting below)' : ''), presets));
-      body.appendChild(row('Render resolution', 'Lower this first if the game stutters', select('renderScale', [['0.5', '50%'], ['0.6', '60%'], ['0.65', '65%'], ['0.75', '75%'], ['0.85', '85%'], ['1', '100%']], parseFloat, true)));
+      body.appendChild(row('Graphics quality', 'Potato: the cheapest look for very weak devices (40% resolution, no shadows, particles, outlines, clouds, reflections or interface animations). Low: 60% resolution, no shadows, fewer particles (weapon animations stay). Medium: 85% and smooth edges (multisampling). High: full resolution + soft shadows. Cinematic: the highest - 4x multisampling, sharp high-resolution shadows and a shader pipeline (HDR light, bloom glow, soft highlights, colour grade, sharpening, vignette, film grain); needs a good GPU, and a device that cannot do it draws High instead. ' + (S.quality === 'custom' ? '(Custom: you changed a setting below)' : ''), presets));
+      body.appendChild(row('Smooth edges', 'Anti-aliasing: multisampling from Medium up (takes effect the next time the page loads), a cheap filter on Low. Off is a little faster', check('smooth')));
+      body.appendChild(row('Render resolution', 'Lower this first if the game stutters', select('renderScale', [['0.4', '40%'], ['0.5', '50%'], ['0.6', '60%'], ['0.65', '65%'], ['0.75', '75%'], ['0.85', '85%'], ['1', '100%']], parseFloat, true)));
       body.appendChild(row('Shadows', 'Off is fastest. Low is a good balance on decent hardware', select('shadows', [['off', 'Off'], ['low', 'Low'], ['high', 'High']], null, true)));
       body.appendChild(row('Visual effects', 'Particles, bullet-hole decals, muzzle flash, shell casings (cosmetic only)', select('effects', [['off', 'Off'], ['low', 'Low'], ['high', 'High']], null, true)));
       body.appendChild(row('Target frame rate', '30 FPS mode renders every other frame for weak devices', select('targetFps', [['60', '60 FPS'], ['30', '30 FPS']], (v) => +v)));
@@ -382,9 +405,32 @@
     }
   };
 
-  // ---------------------------------------------------------------- settings > interface (main menu layout)
+  // ---------------------------------------------------------------- settings > interface (3D lobby on / off, classic main menu layout)
   UI.renderInterface = function (body) {
     const L = RV.menuLayout;
+    const lob = document.createElement('input');
+    lob.type = 'checkbox';
+    lob.checked = RV.settings.lobby3d !== false;
+    lob.addEventListener('change', () => {
+      RV.settings.lobby3d = lob.checked;
+      RV.settingsApi.save();
+      if (RV.lobby) RV.lobby.applyMode();
+    });
+    const sty = document.createElement('div');
+    sty.className = 'presets';
+    sty.setAttribute('role', 'group');
+    sty.setAttribute('aria-label', 'Interface style');
+    for (const o of RV.uiStyle.list) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.uistyle = o.id; // the click is handled by js/menulayout.js
+      b.textContent = o.name;
+      b.className = o.id === RV.uiStyle.id ? 'on' : '';
+      b.setAttribute('aria-pressed', o.id === RV.uiStyle.id ? 'true' : 'false');
+      sty.appendChild(b);
+    }
+    body.appendChild(row('Interface style', 'RIVALS: chunky rounded graphite panels with orange buttons; a dock along the bottom of the lobby, the score card top-left and the health bar + weapon slots bottom-centre in a match. Arcade: the earlier angled navy look with the side panel. Applies instantly and is remembered.', sty));
+    body.appendChild(row('3D lobby', 'The game opens in a 3D lobby with a zone each for Play, Loadout, Practice, Settings and your player. Turn it off for the classic flat menu (also used automatically if the 3D lobby cannot start on this device).', lob));
     const box = document.createElement('div');
     box.className = 'presets';
     box.setAttribute('role', 'group');
@@ -398,10 +444,10 @@
       b.setAttribute('aria-pressed', o.id === L.id ? 'true' : 'false');
       box.appendChild(b);
     }
-    body.appendChild(row('Main Menu Layout', 'B \u2014 Cinematic: a large Play button in the centre over the 3D arena, navigation in a slim bar above it. D \u2014 Arcade Lobby: navigation down the left, the play panel on the right, your loadout bottom-left. Applies instantly, is remembered, and only changes the main menu (never a running match).', box));
+    body.appendChild(row('Classic menu layout', 'Only used when the 3D lobby is off. B \u2014 Cinematic: a large Play button in the centre over the 3D arena, navigation in a slim bar above it. D \u2014 Arcade Lobby: navigation down the left, the play panel on the right, your loadout bottom-left. Applies instantly, is remembered, and only changes the main menu (never a running match).', box));
     const note = document.createElement('p');
     note.className = 'fine';
-    note.innerHTML = 'The same switch is in the top right of the main menu.';
+    note.innerHTML = 'The same switch is in the top right of the classic main menu.';
     body.appendChild(note);
   };
 
@@ -496,6 +542,7 @@
   UI.renderWho = function () {
     const n = RV.profile.get();
     if ($('who-name')) $('who-name').textContent = n || '\u2014';
+    if ($('lb-name')) $('lb-name').textContent = n || '\u2014';
   };
 
   /** Run `cb` once the player has a username (asks for one first if needed). */
@@ -752,8 +799,7 @@
   UI.init = function () {
     document.querySelectorAll('.mode-card').forEach((b) => b.addEventListener('click', () => {
       RV.audio.play('click');
-      if (b.dataset.mode === 'online') UI.requireName(() => UI.startQueue());
-      else UI.openSelect(b.dataset.mode);
+      UI.launch(b.dataset.mode);
     }));
     // username screen
     $('name-input').addEventListener('input', () => UI.validateName());
@@ -829,16 +875,7 @@
       RV.settingsApi.save();
     });
 
-    $('btn-start').addEventListener('click', () => {
-      RV.audio.init();
-      if (RV.settings.fullscreen) RV.enterFullscreen();
-      RV.game.start(UI.selMode, UI.selMap, {
-        bots: RV.settings.botCount,
-        diff: RV.settings.difficulty,
-        kills: RV.settings.killLimit,
-        duelTo: RV.settings.duelTo,
-      });
-    });
+    $('btn-start').addEventListener('click', () => UI.quickStart(UI.selMode, UI.selMap));
 
     // pause menu
     $('btn-resume').addEventListener('click', () => {

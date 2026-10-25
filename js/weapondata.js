@@ -22,12 +22,12 @@
   const WEAPONS = [
     {
       id: 'rifle', name: 'Assault Rifle', short: 'RIFLE', kind: 'gun', dmg: 12, headMul: 1.25, falloff: [18, 71, 0.25], interval: 0.1, auto: true, mag: 20, reserve: 100, reload: 1.56, range: 260, switchTime: 0.25,
-      tracer: 0xffd34d, tw: 0.03, flash: [0xffe29a, 0.07], adsFovMul: 0.82, adsIn: 0.15, adsOut: 0.07, sight: 'iron',
+      tracer: 0xffd34d, tw: 0.03, flash: [0xffe29a, 0.07], adsFovMul: 0.7, adsIn: 0.15, adsOut: 0.07, sight: 'iron',
       desc: 'Automatic, steady and accurate. 12 damage up close, less at range.', stats: { damage: '12 → 3', rate: '600 rpm', mag: '20 / 100', range: 'Long' },
     },
     {
       id: 'pistol', name: 'Handgun', short: 'HANDGUN', kind: 'gun', dmg: 12, headMul: 1.25, falloff: [18, 71, 0.25], interval: 0.13, auto: false, mag: 13, reserve: 91, reload: 1.06, range: 200, switchTime: 0.18,
-      tracer: 0xffb21f, tw: 0.03, flash: [0xffe08a, 0.06], adsFovMul: 0.9, adsIn: 0.11, adsOut: 0.06, sight: 'iron',
+      tracer: 0xffb21f, tw: 0.03, flash: [0xffe08a, 0.06], adsFovMul: 0.8, adsIn: 0.11, adsOut: 0.06, sight: 'iron',
       desc: 'Semi-automatic. One click, one round, quick to reload.', stats: { damage: '12 → 3', rate: 'Semi-auto', mag: '13 / 91', range: 'Medium' },
     },
     {

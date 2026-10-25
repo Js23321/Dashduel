@@ -32,7 +32,10 @@
     STEP_AIR: 0.25,
     SNAP: 0.4,
 
-    WALK: 7.0,
+    // There is no separate walk and sprint any more: the default speed IS the old sprint speed, in every direction (a slide key replaces
+    // the old sprint key). WALK and SPRINT stay as aliases of it for the code that reads them.
+    RUN: 10.5,
+    WALK: 10.5,
     SPRINT: 10.5,
     CROUCH: 4.0,
     GROUND_ACCEL: 12,
@@ -123,6 +126,7 @@
     }
 
     reset(x, y, z, yaw, pitch) {
+      this.resets = (this.resets | 0) + 1; // (the game drops its camera-driven ADS offset when the look is replaced)
       const b = this.b;
       b.x = x;
       b.y = y;
@@ -456,7 +460,7 @@
       if (!hasWish) return;
       let wishSpeed;
       if (this.mode === 'crouch') wishSpeed = P.CROUCH;
-      else wishSpeed = cmd.sprint && cmd.fwd >= 0 ? P.SPRINT : P.WALK;
+      else wishSpeed = P.RUN;
       wishSpeed *= wl;
       const cur = b.vx * wx + b.vz * wz;
       const add = wishSpeed - cur;

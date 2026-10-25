@@ -17,6 +17,10 @@ test(ROOMS + ' simultaneous matches: server cost per second and bandwidth per pl
   const srv = await startServer();
   CFG.MAX_PER_IP = 1000;
   CFG.MAX_CONNECTIONS = 1000;
+  // (this test is about server cost, not maps: the players here run around at random, and on the Docks map that soon means into the lethal water,
+  // which ends the round and moves the room on; so the Docks are left out of the draw)
+  const allMaps = CFG.MAPS.slice();
+  CFG.MAPS.splice(0, CFG.MAPS.length, ...allMaps.filter((m) => m !== 'docks'));
   // time spent inside the room code
   const spent = { tick: 0, input: 0, ticks: 0, inputs: 0 };
   const wrap = (name, key, countKey) => {
@@ -102,6 +106,7 @@ test(ROOMS + ' simultaneous matches: server cost per second and bandwidth per pl
       p.b.close();
     }
   } finally {
+    CFG.MAPS.splice(0, CFG.MAPS.length, ...allMaps);
     for (const u of undo) u();
     await srv.stop();
   }

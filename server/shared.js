@@ -7,11 +7,15 @@
  * Deployment note: the backend therefore needs the repository's js/ folder next to server/ (deploy the
  * whole repo; the frontend host only needs the static files).
  */
+const fs = require('fs');
 const path = require('path');
 
 global.window = global;
 const JS = path.join(__dirname, '..', 'js');
-for (const f of ['util', 'weapondata', 'collision', 'grensim', 'maps', 'player', 'netproto']) require(path.join(JS, f + '.js'));
+for (const f of ['util', 'weapondata', 'collision', 'grensim']) require(path.join(JS, f + '.js'));
+// the collision + spawns of every map made in Blender (tools/blender/build_*.py), before maps.js turns them into maps
+for (const f of fs.readdirSync(JS).filter((n) => /^mapdata-[a-z0-9_]+\.js$/.test(n)).sort()) require(path.join(JS, f));
+for (const f of ['maps', 'player', 'netproto']) require(path.join(JS, f + '.js'));
 
 const RV = global.RV;
 const worlds = {};

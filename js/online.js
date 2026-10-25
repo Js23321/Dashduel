@@ -256,10 +256,16 @@
     O.rematchWindow = 0;
     const gesture = !!(navigator.userActivation && navigator.userActivation.isActive); // (a click is only fresh for a few seconds)
     if (RV.settings.fullscreen && gesture) RV.enterFullscreen();
-    RV.game.start('online', O.mapId, { to: TO });
-    // started without a click: the browser may refuse the pointer lock, then "click to capture the mouse" is shown
-    RV.game.awaitLock = !RV.input.noLock;
-    NC.send({ t: 'ready' });
+    const begin = () => {
+      if (!O.started || !O.matched) return; // (left or closed while the map was loading)
+      RV.game.start('online', O.mapId, { to: TO });
+      // started without a click: the browser may refuse the pointer lock, then "click to capture the mouse" is shown
+      RV.game.awaitLock = !RV.input.noLock;
+      NC.send({ t: 'ready' });
+    };
+    // the map's picture first (normally already loaded in the background); if it cannot be fetched the match still starts
+    if (RV.loadMeshes) RV.loadMeshes(O.mapId).then(begin, begin);
+    else begin();
   };
 
   /** Leave: tells the server (the opponent wins by forfeit) and drops the connection. */

@@ -126,7 +126,7 @@
         reject(new Error(msg));
       };
       const timer = setTimeout(() => fail('The game server at ' + r.url + ' did not answer in time.'), 8000);
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 2, name, tok: readTok() || undefined }));
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 3, name, tok: readTok() || undefined }));
       ws.onerror = () => fail('Could not reach the game server at ' + r.url + '. Is it running?');
       ws.onclose = (e) => {
         if (!done) return fail(e.reason || 'The connection to the game server was closed (code ' + e.code + ').');
@@ -241,7 +241,7 @@
       } catch (e) {
         return finish({ ok: false, error: e.message });
       }
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 2, name: 'Probe' })); // (no token: a probe never touches a real session)
+      ws.onopen = () => ws.send(JSON.stringify({ t: 'hello', v: CFG().PROTOCOL || 3, name: 'Probe' })); // (no token: a probe never touches a real session)
       ws.onerror = () => finish({ ok: false, error: 'Could not connect. Is the server running and the address right?' });
       ws.onclose = () => finish({ ok: false, error: 'The server closed the connection.' });
       let info = null;

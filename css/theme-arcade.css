@@ -288,8 +288,6 @@
 [data-theme="arcade"] .wslot .dj { left: 6px; bottom: 5px; }
 [data-theme="arcade"] .wslot .dj .ic { width: 11px; height: 11px; margin: 0; color: var(--acc); }
 [data-theme="arcade"] .wslot .dj.used .ic { color: var(--tx3); }
-[data-theme="arcade"] #speed-val { font-style: italic; }
-[data-theme="arcade"] #speed-bar i { background: var(--acc); }
 [data-theme="arcade"] #state-label, [data-theme="arcade"] #reload-label { font-weight: 700; }
 
 /* death + match screens: banded, not boxed */

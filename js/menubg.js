@@ -8,11 +8,11 @@
 (function () {
   'use strict';
   const RV = window.RV;
-  const B = (RV.menuBg = { map: 'toybox', t: 0, acc: 0, was: false, world: null, cam: { radius: 0.72, height: 12, look: 1.5, fov: 74, speed: 0.05, bob: 1 } });
+  const B = (RV.menuBg = { map: 'testarena', t: 0, acc: 0, was: false, world: null, cam: { radius: 0.72, height: 12, look: 1.5, fov: 74, speed: 0.05, bob: 1 } });
 
   B.frame = function (dt) {
     const R = RV.render;
-    const on = !!R && R.ready && RV.ui && RV.ui.current === 'main' && !document.hidden;
+    const on = !!R && R.ready && RV.ui && RV.ui.current === 'main' && !document.hidden && RV.settings.quality !== 'potato'; // (potato: no 3D menu backdrop)
     if (!on) {
       B.was = false;
       return;

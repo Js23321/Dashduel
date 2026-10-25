@@ -23,7 +23,7 @@ Run **one** instance: rooms live in this process's memory.
 | `room.js` | one match: input simulation, reconciliation, weapons, lag-compensated hits, grenades, visibility, reconnect, rematch |
 | `anticheat.js` | violation scoring (weights, decay), warn / kick / lockout, rule table |
 | `log.js` | structured JSON logging with secret redaction, security-event ring |
-| `shared.js` | loads the game's own `js/` simulation files (physics, collision, maps, weapons, wire format) |
+| `shared.js` | loads the game's own `js/` simulation files (physics, collision, maps incl. every `mapdata-*.js`, weapons, wire format) |
 | `config.js` | all settings, from environment variables |
 | `test/` | movement, combat, lobby, anti-cheat, session / information-protection and load suites |
 

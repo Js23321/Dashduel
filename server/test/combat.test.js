@@ -54,17 +54,42 @@ test('a headshot does 1.25x (15)', async () => {
   m.b.close();
 });
 
-test('fire rate is enforced: shots inside the weapon interval do nothing', async () => {
+test('fire rate is enforced: a burst of clicks in one instant is forgiven once (a long browser frame), the average rate is never beaten', async () => {
   const m = await liveMatch(srv);
   const pair = openPair(m.map, 8);
   const sa = await stage(m, m.ra, pair);
   sa.step(12, {});
-  sa.act('fire');
-  sa.act('fire'); // the same instant of simulation time
-  sa.step(3, {});
-  sa.act('fire'); // 3 steps (25 ms) later: a rifle fires every 100 ms
+  for (let i = 0; i < 5; i++) sa.act('fire'); // five clicks at the same instant of simulation time
   await sleep(500);
-  assert.strictEqual(m.b.all('hurt').length, 1, 'three shots inside the interval count as one');
+  assert.strictEqual(m.b.all('hurt').length, 2, 'a first shot plus the one extra a long frame can owe; the rest are refused');
+  // a sustained too-fast rain of shots (every 25 ms instead of every 100 ms) is held to the weapon's rate
+  sa.step(30, {});
+  m.b.clear();
+  for (let i = 0; i < 12; i++) {
+    sa.step(3, {});
+    sa.act('fire');
+  }
+  await sleep(600);
+  const n = m.b.all('hurt').length;
+  assert.ok(n >= 3 && n <= 5, '12 shots in 0.3 s of simulation time: only about 4 are allowed (rate + one burst), got ' + n);
+  m.a.close();
+  m.b.close();
+});
+
+test('a shot a hair before the reload finishes (the browser times it on the wall clock) still counts', async () => {
+  const m = await liveMatch(srv);
+  const pair = openPair(m.map, 8);
+  const sa = await stage(m, m.ra, pair);
+  sa.step(1, {});
+  sa.act('fire'); // one round used so a reload is possible, and it hits (this also exercises the normal path)
+  await m.b.wait('hurt', null, 1500);
+  m.b.clear();
+  sa.step(12, {});
+  sa.act('reload');
+  sa.step(Math.round((1.56 - 0.03) * 120), {}); // 30 ms before the server's own reload would be done
+  sa.act('fire');
+  const hurt = await m.b.wait('hurt', null, 4000).catch(() => null); // (the server spends real time simulating those ~200 steps)
+  assert.ok(hurt && hurt.dmg === 12, 'the shot 30 ms early is accepted (reload margin), not silently dropped');
   m.a.close();
   m.b.close();
 });
@@ -188,6 +213,28 @@ test('lag compensation: the shot is checked against where the shooter saw the ta
   shoot(sa, 12);
   await sleep(500);
   assert.strictEqual(m.b.all('hurt').length, 0, 'the rewind is bounded: shooting at where the target was long ago misses');
+  m.a.close();
+  m.b.close();
+});
+
+test('hit tolerance: a shot that grazes just outside the body still counts (lag-compensation margin), one clearly outside does not', async () => {
+  const m = await liveMatch(srv);
+  const pair = openPair(m.map, 8);
+  const dist = Math.hypot(pair.b.x - pair.a.x, pair.b.z - pair.a.z);
+  const sa = await stage(m, m.ra, pair);
+  const yaw0 = sa.pl.yaw;
+  // the body is 0.35 m to each side of its centre line, the margin CFG.LAG.TOL_XZ adds 0.10: 0.43 m off the line is a hit, 0.70 m is not
+  assert.ok(CFG.LAG.TOL_XZ >= 0.08, 'the margin is configured');
+  sa.pl.yaw = yaw0 + Math.atan2(0.43, dist);
+  shoot(sa);
+  const hurt = await m.b.wait('hurt', null, 1500);
+  assert.strictEqual(hurt.dmg, 12, 'a graze 0.43 m off the centre line hits');
+  await sleep(400);
+  m.b.clear();
+  sa.pl.yaw = yaw0 + Math.atan2(0.7, dist);
+  shoot(sa, 12);
+  await sleep(500);
+  assert.strictEqual(m.b.all('hurt').length, 0, 'a shot 0.70 m off the centre line misses');
   m.a.close();
   m.b.close();
 });

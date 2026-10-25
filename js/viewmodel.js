@@ -129,50 +129,64 @@
   // the six weapons (original designs; sights match SPEC[...].sight exactly)
   // -------------------------------------------------------------------------
   const BUILD = {
-    // PULSE RIFLE: full-length rifle, aperture ("peep") sight + front post
+    // SCAR-STYLE ASSAULT RIFLE: monolithic tan receiver with one long flat top rail, boxy slotted handguard,
+    // birdcage flash hider, curved STANAG magazine, angled pistol grip, adjustable stock with a cheek riser.
+    // Sights: flip-up rear aperture (centre (0, 0.1, 0.11)) and a front post whose tip is at y = 0.1.
     rifle(g, M, P) {
-      const alloy = M.alloy(0x2b4766, 0.55),
+      const fde = M.alloy(0xb7a47a, 0.3), // flat dark earth
+        fdeDark = M.alloy(0x8d7d5a, 0.3),
         acc = M.glow(0x2ee6ff);
-      box(g, M.gun, 0.07, 0.06, 0.4, 0, 0.045, 0); // upper receiver
-      box(g, M.poly, 0.074, 0.07, 0.36, 0, -0.015, 0.035); // lower receiver
-      box(g, M.steel, 0.034, 0.012, 0.4, 0, 0.081, 0); // top rail
-      for (let i = 0; i < 10; i++) box(g, M.gun, 0.038, 0.006, 0.012, 0, 0.087, -0.17 + i * 0.037);
-      box(g, alloy, 0.084, 0.082, 0.28, 0, 0.012, -0.29); // handguard
-      for (let i = 0; i < 4; i++) box(g, M.dark, 0.0875, 0.02, 0.035, 0, -0.006, -0.19 - i * 0.06); // vents
-      box(g, acc, 0.0885, 0.005, 0.2, 0, 0.038, -0.29); // light strips
-      box(g, M.gun, 0.03, 0.01, 0.26, 0, 0.059, -0.29);
-      cyl(g, M.steel, 0.012, 0.012, 0.16, 0, 0.012, -0.5, 10); // barrel
-      cyl(g, M.gun, 0.021, 0.021, 0.07, 0, 0.012, -0.575, 10); // muzzle device
-      box(g, M.gun, 0.05, 0.05, 0.008, 0, 0.012, -0.545);
-      box(g, M.gun, 0.05, 0.05, 0.008, 0, 0.012, -0.605);
-      // front post (tip exactly at the sight line y = 0.1)
+      // receiver (upper + lower) and magwell
+      box(g, fde, 0.068, 0.064, 0.44, 0, 0.034, 0.05); // upper receiver, z -0.17 .. 0.27
+      box(g, fde, 0.07, 0.066, 0.23, 0, -0.03, 0.065); // lower receiver
+      box(g, fde, 0.075, 0.074, 0.075, 0, -0.034, -0.05); // magwell
+      box(g, M.dark, 0.004, 0.026, 0.07, 0.035, 0.046, 0.065); // ejection port (right)
+      box(g, fdeDark, 0.0705, 0.006, 0.1, 0, 0.0, 0.0); // seam between upper and lower
+      // handguard: boxy, slotted, with a bottom rail
+      box(g, fde, 0.073, 0.072, 0.31, 0, 0.027, -0.315); // z -0.47 .. -0.16
+      for (let i = 0; i < 4; i++) box(g, M.dark, 0.0745, 0.016, 0.045, 0, 0.03, -0.215 - i * 0.065); // slots (both sides)
+      box(g, M.gun, 0.03, 0.01, 0.22, 0, -0.014, -0.33); // bottom rail
+      // one continuous flat top rail from the stock hinge to the end of the handguard
+      box(g, M.gun, 0.032, 0.016, 0.74, 0, 0.07, -0.1); // top at y = 0.078
+      for (let i = 0; i < 18; i++) box(g, M.dark, 0.034, 0.004, 0.008, 0, 0.0785, -0.455 + i * 0.04);
+      // barrel, gas block and birdcage flash hider
+      cyl(g, M.steel, 0.012, 0.012, 0.13, 0, 0.022, -0.53, 10);
+      box(g, M.gun, 0.03, 0.03, 0.04, 0, 0.034, -0.49); // gas block
+      cyl(g, M.gun, 0.019, 0.019, 0.07, 0, 0.022, -0.6, 10);
+      for (let i = 0; i < 3; i++) box(g, M.dark, 0.042, 0.007, 0.018, 0, 0.022, -0.585 - i * 0.02);
+      box(g, M.dark, 0.007, 0.042, 0.018, 0, 0.022, -0.605);
+      // front sight post (tip exactly at the sight line y = 0.1)
       box(g, M.gun, 0.026, 0.03, 0.03, 0, 0.075, -0.41);
       box(g, M.steel, 0.005, 0.014, 0.005, 0, 0.093, -0.41);
       box(g, M.gun, 0.004, 0.026, 0.02, 0.013, 0.09, -0.41);
       box(g, M.gun, 0.004, 0.026, 0.02, -0.013, 0.09, -0.41);
-      // rear aperture ring centred on (0, 0.1, 0.11)
-      box(g, M.gun, 0.036, 0.014, 0.04, 0, 0.094, 0.11);
+      // rear flip-up aperture sight centred on (0, 0.1, 0.11)
+      box(g, M.gun, 0.036, 0.02, 0.04, 0, 0.088, 0.11);
       ring(g, M.gun, 0.0155, 0.0035, 0, 0.1, 0.11, 14);
-      box(g, M.gun, 0.006, 0.03, 0.03, 0.022, 0.1, 0.11);
-      box(g, M.gun, 0.006, 0.03, 0.03, -0.022, 0.1, 0.11);
-      // grip, guard, stock
-      box(g, M.rubber, 0.05, 0.11, 0.055, 0, -0.1, 0.135, -0.3);
-      box(g, M.poly, 0.012, 0.008, 0.07, 0, -0.062, 0.095);
-      box(g, M.poly, 0.012, 0.03, 0.008, 0, -0.048, 0.06);
-      box(g, M.poly, 0.05, 0.085, 0.16, 0, -0.005, 0.285);
-      box(g, M.poly, 0.046, 0.02, 0.1, 0, 0.045, 0.27);
-      box(g, M.rubber, 0.056, 0.1, 0.02, 0, -0.005, 0.37);
-      box(g, M.dark, 0.004, 0.022, 0.055, 0.0365, 0.05, 0.035); // ejection port
-      box(g, acc, 0.006, 0.006, 0.006, 0.037, 0.0, 0.1); // status light
+      box(g, M.gun, 0.008, 0.03, 0.03, 0.0205, 0.1, 0.11);
+      box(g, M.gun, 0.008, 0.03, 0.03, -0.0205, 0.1, 0.11);
+      // pistol grip, trigger guard
+      box(g, M.rubber, 0.05, 0.125, 0.06, 0, -0.118, 0.145, -0.38);
+      box(g, M.poly, 0.012, 0.008, 0.075, 0, -0.07, 0.07);
+      box(g, M.poly, 0.012, 0.032, 0.008, 0, -0.054, 0.03);
+      // adjustable stock: hinge, body, cheek riser, rubber butt pad
+      box(g, fdeDark, 0.058, 0.07, 0.04, 0, 0.0, 0.285);
+      box(g, fde, 0.05, 0.068, 0.13, 0, -0.012, 0.345);
+      box(g, fde, 0.046, 0.014, 0.1, 0, 0.034, 0.335);
+      box(g, M.dark, 0.052, 0.012, 0.08, 0, -0.03, 0.34); // stock cut-out shadow
+      box(g, M.rubber, 0.056, 0.1, 0.022, 0, -0.014, 0.42);
+      box(g, acc, 0.006, 0.006, 0.006, 0.037, -0.005, 0.1); // status light
       // moving parts
-      P.mag = part(g, 0, -0.095, -0.01);
-      box(P.mag, M.poly, 0.046, 0.14, 0.07, 0, 0, 0, 0.1);
-      box(P.mag, acc, 0.05, 0.012, 0.074, 0, -0.075, 0.005);
-      for (let i = 0; i < 3; i++) box(P.mag, M.dark, 0.048, 0.006, 0.072, 0, 0.03 - i * 0.03, 0, 0.1);
-      P.bolt = part(g, 0.043, 0.05, 0.07);
-      box(P.bolt, M.steel, 0.016, 0.018, 0.05, 0, 0, 0);
-      box(P.bolt, M.steel, 0.02, 0.02, 0.012, 0.012, 0, 0.03);
-      P.trigger = part(g, 0, -0.04, 0.085);
+      P.mag = part(g, 0, -0.07, -0.05);
+      box(P.mag, M.poly, 0.044, 0.055, 0.068, 0, -0.01, 0);
+      box(P.mag, M.poly, 0.044, 0.055, 0.068, 0, -0.06, -0.008, 0.13);
+      box(P.mag, M.poly, 0.044, 0.055, 0.068, 0, -0.108, -0.028, 0.27);
+      box(P.mag, acc, 0.048, 0.01, 0.07, 0, -0.14, -0.05, 0.3);
+      for (let i = 0; i < 3; i++) box(P.mag, M.dark, 0.0465, 0.004, 0.07, 0, -0.03 - i * 0.04, -0.006 * i, 0.1 * i);
+      P.bolt = part(g, 0.037, 0.047, 0.085);
+      box(P.bolt, M.steel, 0.012, 0.016, 0.045, 0, 0, 0);
+      box(P.bolt, M.steel, 0.016, 0.018, 0.01, 0.006, 0, 0.026);
+      P.trigger = part(g, 0, -0.045, 0.085);
       box(P.trigger, M.steel, 0.008, 0.03, 0.01, 0, -0.012, 0);
     },
 
@@ -187,21 +201,23 @@
       box(g, M.poly, 0.012, 0.03, 0.008, 0, -0.019, -0.03);
       box(g, acc, 0.003, 0.05, 0.06, 0.0265, -0.075, 0.078, -0.15); // grip stripe
       box(g, acc, 0.003, 0.05, 0.06, -0.0265, -0.075, 0.078, -0.15);
-      cyl(g, M.steel, 0.011, 0.011, 0.03, 0, 0.04, -0.15, 8); // barrel tip
-      box(g, M.gun, 0.012, 0.02, 0.014, 0, 0.056, 0.125); // hammer
+      cyl(g, M.steel, 0.011, 0.011, 0.04, 0, 0.034, -0.15, 8); // barrel tip, under the slide's nose
+      box(g, M.gun, 0.012, 0.024, 0.014, 0, 0.05, 0.118); // hammer
       P.slide = part(g, 0, 0.04, -0.02);
-      box(P.slide, M.gun, 0.056, 0.04, 0.25, 0, 0, 0);
+      box(P.slide, M.gun, 0.056, 0.052, 0.25, 0, -0.006, 0); // (reaches down into the frame: it rides on it, nothing floats)
+      box(P.slide, M.dark, 0.05, 0.01, 0.2, 0, -0.03, 0.0); // the rails it slides on
       box(P.slide, acc, 0.0035, 0.008, 0.16, 0.0285, 0.008, -0.02);
       box(P.slide, acc, 0.0035, 0.008, 0.16, -0.0285, 0.008, -0.02);
       for (let i = 0; i < 4; i++) box(P.slide, M.dark, 0.058, 0.038, 0.004, 0, 0, 0.09 + i * 0.012); // serrations
       box(P.slide, M.dark, 0.004, 0.016, 0.04, 0.0285, 0.004, 0.0); // ejection port
-      // 3-dot sights, aperture centre (0, 0.088, 0.095): local y = 0.048, z = 0.115
-      box(P.slide, M.gun, 0.008, 0.016, 0.014, 0.014, 0.048, 0.115);
-      box(P.slide, M.gun, 0.008, 0.016, 0.014, -0.014, 0.048, 0.115);
-      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, 0.014, 0.05, 0.1075);
-      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, -0.014, 0.05, 0.1075);
-      box(P.slide, M.gun, 0.009, 0.014, 0.012, 0, 0.041, -0.115); // front post: tip at y = 0.088
-      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, 0, 0.0455, -0.1215);
+      // 3-dot sights, aperture centre (0, 0.08, 0.095): local y = 0.04, z = 0.115
+      box(P.slide, M.gun, 0.01, 0.028, 0.016, 0.0145, 0.032, 0.115); // rear sight blocks, standing on the slide top
+      box(P.slide, M.gun, 0.01, 0.028, 0.016, -0.0145, 0.032, 0.115);
+      box(P.slide, M.gun, 0.039, 0.01, 0.016, 0, 0.022, 0.115); // ...joined at the base so the notch is one piece
+      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, 0.0145, 0.038, 0.1065);
+      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, -0.0145, 0.038, 0.1065);
+      box(P.slide, M.gun, 0.01, 0.022, 0.014, 0, 0.03, -0.115); // front post: tip at local y = 0.041
+      box(P.slide, M.glow(0xffffff), 0.004, 0.004, 0.002, 0, 0.034, -0.1225);
       P.mag = part(g, 0, -0.13, 0.078);
       box(P.mag, M.gun, 0.04, 0.04, 0.06, 0, 0.0, 0);
       box(P.mag, acc, 0.048, 0.01, 0.075, 0, -0.024, 0);
@@ -234,12 +250,53 @@
     },
   };
 
-  const FLASH_SCALE = { rifle: 0.24, pistol: 0.17, fists: 0, grenade: 0 };
+  const FLASH_SCALE = { rifle: 0.26, pistol: 0.17, fists: 0, grenade: 0 };
   const FLASH_COL = { rifle: 0xffe29a, pistol: 0xffe08a };
   const CASING = {
     rifle: { s: [0.011, 0.011, 0.04], mat: 'brass' },
     pistol: { s: [0.009, 0.009, 0.024], mat: 'brass' },
   };
+
+  // -------------------------------------------------------------------------
+  // Models made in Blender (tools/blender/*.py -> js/models-weapons.js). A model is {parts: {body, mag, slide...}}; every
+  // part has a pivot and triangles grouped by material NAME. Animated parts become pivoted groups (P.mag, P.slide ...),
+  // exactly like the hand-built fallbacks below, so the animator does not care where a weapon came from.
+  // -------------------------------------------------------------------------
+  function modelMaterial(M, name) {
+    const t = M.named || (M.named = {
+      steel: M.steel, gun: M.gun, dark: M.dark, poly: M.poly, rubber: M.rubber, brass: M.brass, skin: M.skin, sleeve: M.sleeve, cuff: M.cuff, cuffLine: M.cuffLine,
+      tan: M.alloy(0xb7a47a, 0.3), tanDark: M.alloy(0x8d7d5a, 0.3), olive: M.alloy(0x3d4a3f, 0.15),
+      // the RIVALS look: flat chunky colours (orange rifle with black parts, green / gold / navy grenade, black handgun, tan block fists)
+      orange: M.alloy(0xe8922a, 0.1), orangeDark: M.alloy(0xb86a14, 0.1), black: M.alloy(0x16181d, 0.25), green: M.alloy(0x2f9a3e, 0.1), greenDark: M.alloy(0x1f6e2c, 0.1),
+      navy: M.alloy(0x3a4672, 0.2), skinDark: new THREE.MeshStandardMaterial({ color: 0xb98462, roughness: 0.85, metalness: 0 }),
+      acc: M.glow(0x2ee6ff), accY: M.glow(0xffc400), white: M.glow(0xffffff),
+    });
+    return t[name] || M.gun;
+  }
+  function modelGeometry(m) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(m.p, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(m.n, 3));
+    geo.setIndex(m.i);
+    return geo;
+  }
+  /** Add the parts of `model` to group g; `only` = a part name to build into g itself (hands), P = the animated-part table. */
+  function addModel(g, M, P, model, only) {
+    for (const name in model.parts) {
+      if (only && name !== only) continue;
+      const part_ = model.parts[name];
+      let target = g;
+      if (name !== 'body' && !only) {
+        target = part(g, part_.pivot[0], part_.pivot[1], part_.pivot[2]);
+        P[name] = target;
+      }
+      for (const mat in part_.mats) {
+        const mesh = new THREE.Mesh(modelGeometry(part_.mats[mat]), modelMaterial(M, mat));
+        target.add(mesh);
+      }
+    }
+  }
+  const MODEL_FOR = { rifle: 'rifle', pistol: 'pistol', grenade: 'grenade' };
 
   // -------------------------------------------------------------------------
   // Blocky hands. One shared design: a back-of-hand block, two curled finger blocks, a thumb
@@ -249,6 +306,12 @@
   // -------------------------------------------------------------------------
   function buildHand(M, side) {
     const h = new THREE.Group();
+    if (RV.models && RV.models.hands) {
+      addModel(h, M, {}, RV.models.hands, side > 0 ? 'handR' : 'handL');
+      h.rotation.order = 'YXZ';
+      RV.mergeGroup(h);
+      return h;
+    }
     const sk = M.skin;
     box(h, sk, 0.052, 0.03, 0.058, 0, 0, 0); // back of hand
     box(h, sk, 0.05, 0.024, 0.034, 0, -0.004, -0.044); // fingers, first block
@@ -270,7 +333,7 @@
    * hand (arm rises towards the weapon), y turns it inwards, z rolls the palm.
    */
   const HAND = {
-    rifle: { R: { p: [0.03, -0.06, 0.078], r: [0.3, 0.2, -1.1] }, L: { p: [-0.03, -0.035, -0.115], r: [0.2, -0.5, 0.95] } },
+    rifle: { R: { p: [0.03, -0.074, 0.092], r: [0.3, 0.2, -1.1] }, L: { p: [-0.03, -0.03, -0.135], r: [0.2, -0.5, 0.95] } },
     pistol: { R: { p: [0.027, -0.05, 0.05], r: [0.35, 0.2, -1.1] }, L: { p: [-0.025, -0.075, 0.035], r: [0.2, -0.5, 0.95] } },
     fists: { R: { p: [0.12, -0.1, -0.36], r: [0.95, 0.22, -0.1] }, L: { p: [-0.12, -0.1, -0.36], r: [0.95, -0.22, 0.1] } },
     grenade: { R: { p: [0.13, -0.12, -0.38], r: [0.8, 0.15, -0.4] }, L: { p: [-0.12, -0.17, -0.4], r: [0.9, -0.2, 0.3] } },
@@ -287,7 +350,8 @@
       const root = new THREE.Group();
       const g = new THREE.Group(); // the model (scaled)
       const parts = {};
-      BUILD[id](g, VM.M, parts);
+      if (RV.models && RV.models[MODEL_FOR[id]]) addModel(g, VM.M, parts, RV.models[MODEL_FOR[id]]);
+      else BUILD[id](g, VM.M, parts); // (fallback: the hand-built boxes, used if the model data did not load)
       // bake the static meshes into one mesh per material (animated parts stay separate)
       const animated = [];
       g.traverse((o) => {
@@ -349,6 +413,34 @@
     VM.reset('rifle');
   };
 
+  /**
+   * A static copy of a weapon's model for display (the 3D lobby's loadout rack): the same Blender model and materials the
+   * first-person view uses, nothing animated. Faces -z, about one metre long (rifle); the caller scales / places it.
+   */
+  VM.makeDisplay = function (id) {
+    const g = new THREE.Group();
+    if (!VM.M) return g;
+    if (id === 'fists') {
+      for (const side of [-1, 1]) {
+        const h = buildHand(VM.M, side);
+        h.position.set(side * 0.14, 0, 0);
+        h.rotation.set(0.3, -side * 0.18, side * 0.1);
+        g.add(h);
+      }
+    } else {
+      const parts = {};
+      if (RV.models && RV.models[MODEL_FOR[id]]) addModel(g, VM.M, parts, RV.models[MODEL_FOR[id]]);
+      else if (BUILD[id]) BUILD[id](g, VM.M, parts);
+      const animated = [];
+      g.traverse((o) => {
+        if (o.userData && o.userData.base) animated.push(o);
+      });
+      for (let i = animated.length - 1; i >= 0; i--) RV.mergeGroup(animated[i]);
+      RV.mergeGroup(g);
+    }
+    return g;
+  };
+
   /** Snap straight to a weapon with no animation (new match, respawn...). */
   VM.reset = function (id) {
     VM.anim = new A.Animator();
@@ -386,7 +478,7 @@
   VM.tracerOffset = function (ads) {
     const k = ads || 0;
     VM._to = VM._to || [0, 0, 0];
-    VM._to[0] = 0.13 * (1 - k) + 0.0 * k;
+    VM._to[0] = 0.13 * (1 - k); // (aimed: the muzzle is on the line of the crosshair)
     VM._to[1] = -0.12 * (1 - k) - 0.025 * k;
     VM._to[2] = -0.55;
     return VM._to;

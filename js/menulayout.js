@@ -53,6 +53,33 @@
     L.set(b.dataset.layout);
   });
 
+  // ---- interface style: 'rivals' (default) or 'arcade' - an attribute on <html> (data-ui), the css does the rest
+  const US = (RV.uiStyle = { id: document.documentElement.getAttribute('data-ui') === 'arcade' ? 'arcade' : 'rivals', list: [{ id: 'rivals', name: 'RIVALS' }, { id: 'arcade', name: 'Arcade' }] });
+  US.set = function (id) {
+    if (id !== 'rivals' && id !== 'arcade') return false;
+    US.id = id;
+    document.documentElement.setAttribute('data-ui', id);
+    try {
+      localStorage.setItem('rivel.uiStyle', id);
+    } catch (e) {
+      /* storage blocked: the style still applies for this visit */
+    }
+    document.querySelectorAll('[data-uistyle]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.uistyle === id);
+      b.setAttribute('aria-pressed', b.dataset.uistyle === id ? 'true' : 'false');
+    });
+    return true;
+  };
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('[data-uistyle]');
+    if (!b) return;
+    if (RV.audio) {
+      RV.audio.init();
+      RV.audio.play('click');
+    }
+    US.set(b.dataset.uistyle);
+  });
+
   let saved = null;
   try {
     saved = localStorage.getItem(KEY);

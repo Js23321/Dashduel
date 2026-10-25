@@ -191,7 +191,9 @@
 
     /** Target horizontal FOV (degrees) at full ADS for a given base FOV. */
     adsTargetFov(baseFov) {
-      return baseFov * this.adsWeapon.adsFovMul;
+      // the weapon's own zoom (adsFovMul: 0.7 = the view is 30% narrower), scaled by the player's "ADS zoom" setting
+      const z = RV.settings && RV.settings.adsZoom != null ? RV.settings.adsZoom : 1;
+      return baseFov * RV.clamp(1 - (1 - this.adsWeapon.adsFovMul) * z, 0.35, 1);
     }
 
     /**

@@ -25,7 +25,8 @@
  *   ADMIN_TOKEN       if set, the debug endpoints need "Authorization: Bearer <token>"; if empty they answer only
  *                     requests from the local machine
  *   LOG_LEVEL / LOG_FORMAT   "info"|"debug"|"quiet"  /  "json" (default) | "text"
- *   SPAWN_PROTECT_S   seconds of spawn protection when a round goes live (default 2, 0 = off)
+ *   SPAWN_PROTECT_S   seconds a player cannot be hurt after a round goes live (default 0 = off: the 3 s frozen countdown IS the protection;
+ *                     a value above 0 makes shots at a fresh opponent do nothing, which looks like a hit-registration bug)
  * Anti-cheat thresholds (all optional, see docs/ONLINE_BACKEND.md): AC_WARN_SCORE, AC_KICK_SCORE, AC_DECAY,
  *   AC_LOCKOUT_S, AC_MAX_TURN_RATE, AC_CLAIM_EPS, AC_INPUT_QUEUE_MAX, AC_INPUT_BURST_STEPS, LAG_MAX_REWIND_MS, ...
  *   TEST_MODE         "1" = tests only: allows the test-only teleport message. Never enable on a public server.
@@ -55,14 +56,14 @@ module.exports = {
   ADMIN_TOKEN: env.ADMIN_TOKEN || '',
   TEST_MODE: env.TEST_MODE === '1', // TESTS ONLY: enables the test-only teleport message. Never set in production.
 
-  PROTOCOL: 2, // bump when the client/server messages change incompatibly
+  PROTOCOL: 3, // bump when the client/server messages change incompatibly (3: one run speed, no sprint)
   TICK_HZ: 30, // snapshots and room housekeeping per second (movement is stepped at 120 Hz, see js/player.js)
   MAX_MESSAGE: 4096, // bytes per client message
-  MAPS: ['toybox', 'skybridge', 'pinwheel', 'vertigo', 'testarena'], // online 1v1 maps (the duel maps)
+  MAPS: ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms'], // online 1v1 maps (Arena, Bridge, Crossroads, Docks, Station, Backrooms; ids that have no data file are skipped)
   TO: 5, // rounds to win a match
   COUNTDOWN: 3, // seconds locked in the spawn at the start of every round
   ROUND_TIME: 90, // seconds per round (then most health wins)
-  SPAWN_PROTECT_S: num(env.SPAWN_PROTECT_S, 2), // a player who has just gone live takes no damage for this long, or until they attack (0 = off)
+  SPAWN_PROTECT_S: num(env.SPAWN_PROTECT_S, 0), // a player who has just gone live takes no damage for this long, or until they attack (0 = off)
   LOADING_TIMEOUT: 25, // seconds both players get to load the map
   ENDED_PAUSE: 1.9, // seconds between a round ending and the next countdown
   OVER_PAUSE: 1.6, // seconds between the last round ending and the match-end screen
@@ -85,11 +86,17 @@ module.exports = {
   },
   // ---- combat ----------------------------------------------------------------------------------------------
   LAG: {
-    MAX_REWIND_MS: num(env.LAG_MAX_REWIND_MS, 350), // lag compensation never rewinds further than this
-    INTERP_MS: 100, // the clients draw opponents this far in the past
+    MAX_REWIND_MS: num(env.LAG_MAX_REWIND_MS, 400), // lag compensation never rewinds further than this
+    INTERP_MS: 115, // the clients draw opponents 100 ms in the past, from 30 Hz snapshots that are on average ~15 ms old when sampled
+    JITTER_MS: num(env.LAG_JITTER_MS, 30), // the round trip is only an estimate: a shot also counts if it was on target this much earlier or later
+    TOL_XZ: num(env.LAG_TOL_XZ, 0.1), // m: the target's box is this much wider (each side) for a rewound shot, so a shot that was on the drawn body is never lost
+    TOL_Y: num(env.LAG_TOL_Y, 0.08), // m: and this much taller (head and feet)
     HIST_MS: 1500, // how much position history is kept
   },
-  FIRE_INTERVAL_TOLERANCE: num(env.AC_FIRE_TOLERANCE, 0.9), // a shot may come at 90% of the weapon interval (frame granularity)
+  FIRE_INTERVAL_TOLERANCE: num(env.AC_FIRE_TOLERANCE, 0.9), // (melee) a punch may come at 90% of the weapon interval (frame granularity)
+  FIRE_SLACK_S: num(env.AC_FIRE_SLACK, 0.12), // guns: a leaky bucket of owed firing time. A long frame makes the browser fire two shots at once; up to this much
+  //                                              extra is forgiven, but the average rate can never beat the weapon's interval
+  RELOAD_TOLERANCE_S: num(env.RELOAD_TOLERANCE_S, 0.07), // the browser's reload timer is wall-clock, the server's is in steps: a shot this early still counts as after the reload
   // ---- information protection ------------------------------------------------------------------------------
   VIS: {
     ENABLED: env.VIS_CULLING !== '0', // only send the opponent's state when they could be seen (line of sight, with margin)

@@ -616,10 +616,14 @@
   R.init = function (canvas) {
     R.canvas = canvas;
     let renderer;
+    // smooth edges: hardware multisampling from the Medium preset up (it can only be chosen when the context is created; Low and Potato get
+    // the cheap FXAA pass of js/post.js instead, or nothing on Potato)
+    const S0 = RV.settings || {};
+    const msaa = S0.smooth !== false && (S0.quality === 'medium' || S0.quality === 'high' || S0.quality === 'cinematic' || (S0.quality === 'custom' && S0.renderScale >= 0.85));
     try {
       renderer = new THREE.WebGLRenderer({
         canvas,
-        antialias: false,
+        antialias: msaa,
         alpha: false,
         stencil: false,
         powerPreference: 'high-performance',
@@ -747,7 +751,8 @@
     const on = level !== 'off';
     R.renderer.shadowMap.enabled = on;
     R.sun.castShadow = on;
-    const size = level === 'high' ? 2048 : 1024;
+    const cine = !!RV.settings.cinematic && level === 'high';
+    const size = cine ? 4096 : level === 'high' ? 2048 : 1024;
     const ext = level === 'high' ? 55 : 42;
     const sh = R.sun.shadow;
     if (sh.mapSize.x !== size || !on) {
@@ -767,6 +772,7 @@
     sh.normalBias = 0.06;
     sh.camera.updateProjectionMatrix();
     R.shadowLevel = level;
+    R._cine = !!RV.settings.cinematic;
     if (R.mapMeshes) {
       for (const m of R.mapMeshes) {
         m.castShadow = on;
@@ -788,9 +794,20 @@
 
   /** Quality-dependent decoration: clouds, character outlines. */
   R.setDetail = function (quality) {
-    R.outlines = quality !== 'low';
-    if (R.cloudMesh) R.cloudMesh.visible = quality !== 'low';
+    const potato = quality === 'potato';
+    R.potato = potato;
+    R.outlines = quality !== 'low' && !potato;
+    if (R.cloudMesh) R.cloudMesh.visible = R.outlines;
     for (const b of R.botMeshes || []) if (b.outlineGroup) b.outlineGroup.visible = R.outlines;
+    // potato: also drop everything that only decorates (each of these costs fill rate or a pass on weak GPUs)
+    if (R.shadowMesh) R.shadowMesh.visible = !potato; // baked contact shadows (a big transparent overdraw)
+    if (R.decalMesh) R.decalMesh.visible = !potato; // floor markings
+    if (R.skyGroup) for (const o of R.skyGroup.children) if (o.isSprite) o.visible = !potato; // the sun glow covers a big part of the screen
+    if (R.envRT && R.scene) {
+      R.scene.environment = potato ? null : R.envRT.texture; // no reflections on the metal parts
+      if (R.vmScene) R.vmScene.environment = potato ? null : R.envRT.texture;
+    }
+    document.documentElement.classList.toggle('potato', potato); // interface: no animations / blurs (css/style.css)
   };
 
   // ---------------------------------------------------------------------------
@@ -824,6 +841,14 @@
       col.setXYZ(i, c.r, c.g, c.b);
     }
     col.needsUpdate = true;
+
+    if (sky.indoor) {
+      // an enclosed map (the Backrooms): nothing of the sky is ever visible, so draw none of its decoration
+      R.cloudMesh = null;
+      R.scene.environment = null;
+      R.vmScene.environment = null;
+      return;
+    }
 
     // sun disc + glow (direction matches the directional light)
     const sd = new THREE.Vector3(40, 90, 30).normalize();
@@ -903,7 +928,12 @@
       R.cloudMesh = cm;
     }
 
-    // reflection map of this sky (once per map: ~tens of ms, never during play)
+    // reflection map of this sky (once per map: ~tens of ms, never during play); potato mode skips it
+    if (RV.settings.quality === 'potato') {
+      R.scene.environment = null;
+      R.vmScene.environment = null;
+      return;
+    }
     try {
       const pm = new THREE.PMREMGenerator(R.renderer);
       const rt = pm.fromScene(R.skyScene, 0.0, 5, 3500);
@@ -915,6 +945,65 @@
     } catch (e) {
       R.scene.environment = null;
     }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Models from data (RV.meshes[...], exported from Blender by tools/blender/*.py)
+  // ---------------------------------------------------------------------------
+  /**
+   * Add the triangles of a mesh-data model to the builders by material kind: 0 lit + tiled (b.main), 1 metal, 2 glowing,
+   * 3 lit without the tile texture. Normals come from the file (older exports) or from the winding.
+   */
+  R._addModelTris = function (mdl, b, fallbackColor) {
+    const P = mdl.pos,
+      N = mdl.nor,
+      pal = mdl.palette,
+      kind = mdl.kind;
+    const n = mdl.col.length;
+    const A = [0, 0, 0],
+      B = [0, 0, 0],
+      C = [0, 0, 0],
+      nn = [0, 0, 1];
+    for (let i = 0; i < n; i++) {
+      const o = i * 9;
+      A[0] = P[o]; A[1] = P[o + 1]; A[2] = P[o + 2];
+      B[0] = P[o + 3]; B[1] = P[o + 4]; B[2] = P[o + 5];
+      C[0] = P[o + 6]; C[1] = P[o + 7]; C[2] = P[o + 8];
+      if (N) {
+        nn[0] = N[i * 3]; nn[1] = N[i * 3 + 1]; nn[2] = N[i * 3 + 2];
+      } else {
+        const e1x = B[0] - A[0], e1y = B[1] - A[1], e1z = B[2] - A[2];
+        const e2x = C[0] - A[0], e2y = C[1] - A[1], e2z = C[2] - A[2];
+        const cx = e1y * e2z - e1z * e2y, cy = e1z * e2x - e1x * e2z, cz = e1x * e2y - e1y * e2x;
+        const l = Math.hypot(cx, cy, cz) || 1;
+        nn[0] = cx / l; nn[1] = cy / l; nn[2] = cz / l;
+      }
+      const ci = mdl.col[i];
+      const cc = pal ? pal[ci] : fallbackColor;
+      const k = kind ? kind[ci] : 0;
+      const gb = k === 1 ? b.metal : k === 2 ? b.light : k === 3 ? b.prop : b.main;
+      gb.tri(A.slice(), B.slice(), C.slice(), nn.slice(), cc, TILE_MAIN);
+    }
+  };
+
+  /** A THREE.Group drawn from mesh data (the lobby): one mesh per material kind, shared materials. */
+  R.buildModelGroup = function (mdl) {
+    const b = { main: new GeoBuilder(), metal: new GeoBuilder(), light: new GeoBuilder(), prop: new GeoBuilder() };
+    b.main.ao = b.metal.ao = b.prop.ao = true;
+    R._addModelTris(mdl, b, 0xa9aeb8);
+    const g = new THREE.Group();
+    const add = (gb, mat) => {
+      if (gb.empty) return;
+      const m = new THREE.Mesh(gb.build(), mat);
+      m.matrixAutoUpdate = false;
+      m.updateMatrix();
+      g.add(m);
+    };
+    add(b.main, R.matMain);
+    add(b.metal, R.matMetal);
+    add(b.prop, R.matProp);
+    add(b.light, R.matLight);
+    return g;
   };
 
   // ---------------------------------------------------------------------------
@@ -946,9 +1035,12 @@
     const accents = [RV.COL.cyan, RV.COL.magenta, RV.COL.lime, RV.COL.orange];
     let accentIdx = 0;
 
+    // a map that is drawn from a model: its solids are collision only. If the model's data did not load (an old cached
+    // page, say) they are drawn as plain boxes instead, so the map is never an invisible void.
+    const mdl = def.mesh && RV.meshes && RV.meshes[def.mesh];
     for (const s of world.solids) {
       const d = s.def;
-      if (d.invisible) continue; // collision only (a map that is drawn from a model)
+      if (d.invisible && mdl) continue;
       const color = d.color != null ? d.color : 0x4c586c;
       if (!s.isRamp) {
         const x0 = s.minX, y0 = s.minY, z0 = s.minZ, x1 = s.maxX, y1 = s.maxY, z1 = s.maxZ;
@@ -988,16 +1080,7 @@
     }
 
     // a map drawn from a model: its triangles, one colour (collision for it is the invisible solids above)
-    const mdl = def.mesh && RV.meshes && RV.meshes[def.mesh];
-    if (mdl) {
-      const mc = def.meshColor != null ? def.meshColor : 0xa9aeb8;
-      const P = mdl.pos,
-        Nn = mdl.nor;
-      for (let i = 0; i < Nn.length / 3; i++) {
-        const o = i * 9;
-        main.tri([P[o], P[o + 1], P[o + 2]], [P[o + 3], P[o + 4], P[o + 5]], [P[o + 6], P[o + 7], P[o + 8]], [Nn[i * 3], Nn[i * 3 + 1], Nn[i * 3 + 2]], mc, TILE_MAIN);
-      }
-    }
+    if (mdl) R._addModelTris(mdl, { main, metal, light, prop }, def.meshColor != null ? def.meshColor : 0xa9aeb8);
 
     // floor decals (rings, arrows, emblems, lane markings)
     for (const dc of def.decals || []) R._floorDecal(decal, dc);
@@ -1027,6 +1110,8 @@
     if (sm) sm.renderOrder = 1;
     const dm = add(decal, R.matDecal, false);
     if (dm) dm.renderOrder = 2;
+    R.shadowMesh = sm;
+    R.decalMesh = dm;
 
     // launch pads
     for (const p of world.pads) {
@@ -1065,6 +1150,17 @@
       m.position.set(b.x, b.y0 + h / 2, b.z);
       grp.add(m);
       R._regCyl(m, b.x, b.z, b.r, b.y0 - 1, b.y1);
+    }
+
+    // water (Docks): a large plane at the surface; the map's kill height sits just below it, so falling in ends the life
+    if (def.water) {
+      const w = def.water;
+      const wg = new THREE.PlaneGeometry(1600, 1600);
+      wg.rotateX(-Math.PI / 2);
+      const wm = new THREE.Mesh(wg, new THREE.MeshLambertMaterial({ color: w.color != null ? w.color : 0x2a86c8, transparent: true, opacity: w.opacity != null ? w.opacity : 0.88 }));
+      wm.position.set(0, w.y, 0);
+      wm.renderOrder = 1;
+      grp.add(wm);
     }
 
     R.scene.add(grp);
@@ -1227,6 +1323,9 @@
       for (const r of R.rings) {
         R.scene.remove(r.group);
         R.scene.remove(r.beam);
+        r.group.traverse((o) => {
+          if (o.geometry) o.geometry.dispose(); // the ring torus and its disc
+        });
         r.beam.geometry.dispose();
         r.beamMat.dispose();
         r.mat.dispose();
@@ -1304,8 +1403,8 @@
   R.botMeshes = [];
 
   const WEAPON_STYLE = {
-    rifle: { body: 0x3b4252, accent: 0x00b8d9 },
-    pistol: { body: 0x3f4a58, accent: 0xffc300 },
+    rifle: { body: 0xe8922a, accent: 0x16181d }, // the RIVALS rifle: orange body, black parts
+    pistol: { body: 0x23262d, accent: 0x16181d }, // the RIVALS handgun: all black
     fists: { body: 0x3f4a58, accent: 0xffffff },
   };
 
@@ -1337,13 +1436,18 @@
         muzzle = [0, 0.03, -0.16];
         break;
       default:
-        mk(mBody, 0.07, 0.1, 0.46, 0, 0, 0);
-        mk(mDark, 0.045, 0.045, 0.26, 0, 0.012, -0.36);
-        mk(mDark, 0.052, 0.14, 0.08, 0, -0.11, -0.06);
-        mk(mDark, 0.06, 0.13, 0.07, 0, -0.1, 0.13);
-        mk(mDark, 0.06, 0.1, 0.18, 0, -0.01, 0.3);
-        mk(mAcc, 0.075, 0.014, 0.22, 0, 0.056, -0.04);
-        muzzle = [0, 0.012, -0.5];
+        // SCAR-style: long flat rail, boxy handguard, flash hider, curved magazine, angled grip, stock
+        mk(mBody, 0.072, 0.1, 0.42, 0, 0, 0.04); // receiver
+        mk(mBody, 0.078, 0.08, 0.3, 0, 0.005, -0.33); // handguard
+        mk(mDark, 0.034, 0.016, 0.78, 0, 0.056, -0.1); // top rail
+        mk(mDark, 0.04, 0.04, 0.13, 0, 0.012, -0.56); // barrel + flash hider
+        mk(mDark, 0.05, 0.1, 0.07, 0, -0.095, -0.05); // magazine (upper)
+        mk(mDark, 0.05, 0.08, 0.07, 0, -0.17, -0.08); // magazine (curved lower part)
+        mk(mDark, 0.056, 0.12, 0.06, 0, -0.1, 0.16); // grip
+        mk(mBody, 0.058, 0.095, 0.2, 0, -0.012, 0.35); // stock
+        mk(mDark, 0.062, 0.115, 0.026, 0, -0.012, 0.46); // butt pad
+        mk(mAcc, 0.0745, 0.01, 0.2, 0, 0.034, -0.05);
+        muzzle = [0, 0.012, -0.64];
     }
     mergeGroup(group); // 3 draw calls (one per material) instead of one per box
     return { group, mats, muzzle };
@@ -1698,16 +1802,24 @@
     }
     const r = R.renderer;
     r.info.reset();
-    r.clear(true, true, false);
-    r.render(R.skyScene, R.skyCam); // sky first (never fogged, infinitely far)
-    r.clearDepth();
-    r.render(R.scene, R.camera);
-    if (RV.settings.showWeapon && !R.vm.hidden) {
+    const drawScene = (afterWorld) => {
+      r.clear(true, true, false);
+      r.render(R.skyScene, R.skyCam); // sky first (never fogged, infinitely far)
       r.clearDepth();
-      r.render(R.vmScene, R.vmCamera);
+      r.render(R.scene, R.camera);
+      if (afterWorld) afterWorld(); // (cinematic: ambient occlusion goes into the picture here, before the weapon is drawn)
+      if (RV.settings.showWeapon && !R.vm.hidden) {
+        r.clearDepth();
+        r.render(R.vmScene, R.vmCamera);
+      }
+      R.stats.calls = r.info.render.calls;
+      R.stats.tris = r.info.render.triangles;
+    };
+    // the highest preset draws through the HDR + bloom + grade pipeline of js/post.js; anything else (or a device that cannot) draws directly
+    if (!(RV.post && RV.post.cinematicActive() && RV.post.renderCinematic(drawScene))) {
+      drawScene();
+      if (RV.post) RV.post.afterScene(); // smooth edges without MSAA: the cheap FXAA pass
     }
-    R.stats.calls = r.info.render.calls;
-    R.stats.tris = r.info.render.triangles;
   };
 
   RV.GeoBuilder = GeoBuilder;

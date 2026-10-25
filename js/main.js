@@ -13,7 +13,7 @@
         RV.render.setScale(S.renderScale);
       }
       RV.render.setFov(S.fov);
-      if (RV.render.shadowLevel !== S.shadows) RV.render.setShadows(S.shadows);
+      if (RV.render.shadowLevel !== S.shadows || RV.render._cine !== !!S.cinematic) RV.render.setShadows(S.shadows);
       RV.render.setDetail(S.quality);
       RV.render.setFx(S.effects);
       if (RV.perfReset) RV.perfReset();
@@ -110,6 +110,11 @@
   /** Next cheaper look; returns the message to show, or null when nothing is left to remove. */
   function degrade() {
     const R = RV.render;
+    if (RV.post && RV.post.cinematicActive()) {
+      RV.post.setCinematic(false);
+      R.setShadows(RV.settings.shadows);
+      return 'Low FPS: cinematic effects turned off';
+    }
     if (R.fxLevel === 'high') {
       R.setFx('low');
       return 'Low FPS: fewer particles and decals';
@@ -208,8 +213,10 @@
     if (dt > 0.1) dt = 0.1;
     if (dt <= 0) return;
     const g = RV.game;
+    if (g.state !== 'menu' && RV.lobby && RV.lobby.active) RV.lobby.leave(); // a match is running: the lobby stops drawing
     if (g.state === 'menu') {
-      if (RV.menuBg) RV.menuBg.frame(dt); // the slow 3D arena behind the main menu
+      if (RV.lobby && RV.lobby.enabled()) RV.lobby.frame(dt); // the 3D lobby behind every menu screen
+      else if (RV.menuBg) RV.menuBg.frame(dt); // classic menu: the slow 3D arena behind it
       return;
     }
     try {
@@ -255,8 +262,10 @@
     RV.render.userScale = RV.settings.renderScale;
     RV.render.setScale(RV.settings.renderScale);
     RV.applySettings();
+    if (RV.lobby) RV.lobby.init(); // the 3D lobby (falls back to the classic menu if it cannot be built)
     RV.ui.show(RV.profile.get() ? 'main' : 'name'); // first launch: choose a username
     document.getElementById('loading').classList.add('gone');
+    if (RV.preloadMeshes) setTimeout(() => RV.preloadMeshes(), 2500); // map pictures arrive quietly while you are in the lobby
     requestAnimationFrame((t) => {
       last = t;
       requestAnimationFrame(loop);

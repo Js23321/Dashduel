@@ -9,7 +9,7 @@
     // weapons (side views, barrel to the right)
     rifle: svg(
       '0 0 48 20',
-      '<path d="M1 7h8l1-1h18V4h3v2h3v-1h3v1h2l1 1h8v3h-8l-1 1h-9l-3 1h-3l-1 6h-5l1-6h-3l-2 5H8l1-5H5l-1 2H1z"/>'
+      '<path d="M1 7.5h4V7h2.5l1-1H31V4.2h12.5V6H46v2.2h-2.5V11H31.5l-.7.9h-5.6l1.3 7.1h-4.1l-1.8-7.1h-3.5l-2.6 6.5h-3.6l2.4-6.5H9.5V13H5.5l-.7.8H1z"/>'
     ),
     pistol: svg(
       '0 0 32 20',

@@ -10,7 +10,6 @@
     { id: 'left', label: 'Strafe left', group: 'Movement' },
     { id: 'right', label: 'Strafe right', group: 'Movement' },
     { id: 'jump', label: 'Jump / wall jump', group: 'Movement' },
-    { id: 'sprint', label: 'Sprint', group: 'Movement' },
     { id: 'slide', label: 'Slide / crouch', group: 'Movement' },
     { id: 'fire', label: 'Shoot', group: 'Combat' },
     { id: 'aim', label: 'Aim down sights', group: 'Combat' },
@@ -32,9 +31,8 @@
     left: ['KeyA', 'ArrowLeft'],
     right: ['KeyD', 'ArrowRight'],
     jump: ['Space', ''],
-    sprint: ['ShiftLeft', ''],
-    // Ctrl is the classic slide key, but Ctrl+W closes a Chromebook tab - so C is bound too.
-    slide: ['ControlLeft', 'KeyC'],
+    // Shift slides (there is no sprint key: you always run); C is bound too because Ctrl+W closes a Chromebook tab.
+    slide: ['ShiftLeft', 'KeyC'],
     fire: ['Mouse0', ''],
     aim: ['Mouse2', ''],
     reload: ['KeyR', ''],
@@ -54,15 +52,19 @@
     sens: 1.0,
     invertY: false,
     autoHop: true,
-    alwaysSprint: false,
     wheelSwitch: true, // mouse wheel cycles weapons
     scopeSens: true, // scale look speed with the zoom while aiming
     adsToggle: false, // false = hold right mouse to aim, true = click to toggle
+    adsPull: 1, // 0..1: how much of the aiming movement is done by turning the view toward the sights (1) instead of sliding the gun (0)
+    adsCentre: true, // while aiming: true = the gun is centred and the rear sight hole is dead on the crosshair (default); false = the gun sits to the right, turned in so its front sight is on the crosshair
+    adsZoom: 1, // 0..2: how strongly aiming zooms the view (1 = each weapon's own zoom)
+    adsVer: 2, // 2: the centred gun became the default (older saves are moved to it once)
     adsSens: 1.0, // extra multiplier on look speed while aiming
     resultsScreen: false, // pause on a results screen after duel / deathmatch matches (default: keep playing)
     username: '', // chosen by the player (3-16 characters); shown to opponents in online matches
     startWeapon: 0, // slot equipped at the start of every life (0 = rifle .. 3 = grenade)
     uiVer: 2, // bumped when the interface was redesigned (resets the crosshair to its new default)
+    bindsVer: 3, // 3: there is no sprint key and Shift slides (saved bindings from before get that one change)
     // view
     fov: 100,
     fovKick: true,
@@ -76,6 +78,8 @@
     xhColor: '#ffffff',
     // graphics (quality = preset name or 'custom')
     quality: 'medium',
+    cinematic: false, // the highest preset: HDR + bloom + grade (js/post.js)
+    smooth: true, // smooth edges: MSAA (Medium and up) or the cheap FXAA pass (Low)
     renderScale: 0.85,
     shadows: 'off', // off | low | high
     effects: 'low', // off | low | high
@@ -83,6 +87,7 @@
     autoQuality: true,
     showFps: false,
     fullscreen: false,
+    lobby3d: true, // the 3D lobby is the start screen (off = the classic flat menu)
     // audio
     volume: 0.5,
     // arena
@@ -106,15 +111,23 @@
 
   /** Graphics presets: every knob that costs GPU time. */
   RV.QUALITY = {
-    low: { renderScale: 0.6, shadows: 'off', effects: 'low' },
-    medium: { renderScale: 0.85, shadows: 'off', effects: 'high' },
-    high: { renderScale: 1.0, shadows: 'low', effects: 'high' },
+    // POTATO: the cheapest picture the game can draw: 40% resolution, no shadows, no particles / decals / casings /
+    // muzzle flash, no outlines, clouds, sun glow, reflections, floor decals or contact shadows, and no interface
+    // animations. Gameplay, hit detection and the weapon animations are unchanged.
+    potato: { renderScale: 0.4, shadows: 'off', effects: 'off', cinematic: false },
+    low: { renderScale: 0.6, shadows: 'off', effects: 'low', cinematic: false },
+    medium: { renderScale: 0.85, shadows: 'off', effects: 'high', cinematic: false },
+    high: { renderScale: 1.0, shadows: 'low', effects: 'high', cinematic: false },
+    // CINEMATIC: everything High has, plus 4x multisampling, high-resolution shadows and the HDR pipeline (bloom, soft highlight roll-off,
+    // grade, sharpen, vignette, film grain). Needs a good GPU; devices that cannot do float render targets quietly draw it as High.
+    cinematic: { renderScale: 1.0, shadows: 'high', effects: 'high', cinematic: true },
   };
 
   /** Pick a sensible first-run preset from what the browser tells us about the device. */
   function detectQuality() {
     const mem = navigator.deviceMemory || 4;
     const cores = navigator.hardwareConcurrency || 4;
+    if (mem <= 2 || cores <= 2) return 'potato';
     if (mem <= 4 || cores <= 4) return 'low';
     if (mem >= 8 && cores >= 8) return 'high';
     return 'medium';
@@ -133,7 +146,7 @@
       let match = 'custom';
       for (const k in RV.QUALITY) {
         const q = RV.QUALITY[k];
-        if (q.renderScale === s.renderScale && q.shadows === s.shadows && q.effects === s.effects) match = k;
+        if (q.renderScale === s.renderScale && q.shadows === s.shadows && q.effects === s.effects && !!q.cinematic === !!s.cinematic) match = k;
       }
       s.quality = match;
     },
@@ -161,6 +174,16 @@
             const b = saved.binds[id];
             if (Array.isArray(b)) RV.settings.binds[id] = [String(b[0] || ''), String(b[1] || '')];
           }
+        }
+        if (!(saved.adsVer >= RV.DEFAULT_SETTINGS.adsVer)) {
+          RV.settings.adsCentre = RV.DEFAULT_SETTINGS.adsCentre;
+          RV.settings.adsVer = RV.DEFAULT_SETTINGS.adsVer;
+        }
+        if (!(saved.bindsVer >= RV.DEFAULT_SETTINGS.bindsVer)) {
+          // older saves: Shift was Sprint and Ctrl / C slid. Now you always run and Shift slides.
+          for (const id in RV.settings.binds) for (let i = 0; i < 2; i++) if (RV.settings.binds[id][i] === 'ShiftLeft') RV.settings.binds[id][i] = '';
+          RV.settings.binds.slide = RV.DEFAULT_BINDS.slide.slice();
+          RV.settings.bindsVer = RV.DEFAULT_SETTINGS.bindsVer;
         }
       }
     },

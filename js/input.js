@@ -84,8 +84,7 @@
     cmd.jumpDown = input.isDown('jump');
     cmd.jumpPressed = input.consume('jump');
     cmd.crouch = input.isDown('slide');
-    const sprintKey = input.isDown('sprint');
-    cmd.sprint = RV.settings.alwaysSprint ? !sprintKey : sprintKey;
+    cmd.sprint = true; // always running: there is no sprint key (the flag stays in the input format; the simulation ignores it)
     return cmd;
   };
 

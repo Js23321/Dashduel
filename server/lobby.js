@@ -11,6 +11,7 @@ const schema = require('./schema');
 const ac = require('./anticheat');
 const { Sessions } = require('./sessions');
 const { Room } = require('./room');
+const { RV } = require('./shared');
 
 const now = () => performance.now();
 const NAME_RE = /[^A-Za-z0-9_\- ]/g;
@@ -37,6 +38,8 @@ class Client {
     this.room = null;
     this.seat = -1;
     this.rtt = 80;
+    this.rttHist = []; // the last few ping samples (a browser that is busy answers late: the lowest samples are the network)
+    this.rttLC = 80; // the estimate lag compensation uses: half the average, half the best of the recent samples
     this.lastSeen = now();
     this.connectedAt = now();
     this.tokens = 120;
@@ -222,6 +225,9 @@ class Lobby {
         if (c.pingSent && Math.abs(m.ts - c.pingSent) < 1) {
           const sample = now() - c.pingSent;
           c.rtt = c.rtt * 0.7 + Math.min(sample, 2000) * 0.3;
+          c.rttHist.push(Math.min(sample, 2000));
+          if (c.rttHist.length > 6) c.rttHist.shift();
+          c.rttLC = c.rtt * 0.5 + Math.min(...c.rttHist) * 0.5;
           c.pingSent = 0;
         }
         return;
@@ -281,7 +287,8 @@ class Lobby {
         this.queue.unshift(a); // (cannot happen: one connection per session) never match a session with itself
         continue;
       }
-      const map = CFG.MAPS[Math.floor(Math.random() * CFG.MAPS.length)];
+      const pool = CFG.MAPS.filter((id) => RV.maps[id]); // (a map whose data file is missing is skipped, never played)
+      const map = pool[Math.floor(Math.random() * pool.length)];
       const room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
       a.state = b.state = 'room';
       a.session.room = b.session.room = room;

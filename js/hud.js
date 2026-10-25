@@ -15,8 +15,8 @@
 
   H.init = function () {
     const ids = [
-      'hud', 'hud-prot', 'prot-time', 'lock-prompt', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 'speed-val', 'speed-fill', 'state-label',
-      'top-speed', 'hud-title', 'hud-timer', 'hud-sub', 'hud-split', 'hud-center', 'hud-hint', 'hud-feed', 'fps',
+      'hud', 'hud-prot', 'prot-time', 'lock-prompt', 'hp-fill', 'hp-val', 'vital-hp', 'ammo-val', 'ammo-max', 'reload-label', 
+      'hud-title', 'hud-timer', 'hud-sub', 'hud-split', 'hud-center', 'hud-hint', 'hud-feed', 'fps',
       'cp-marker', 'hitmarker', 'vignette', 'blast', 'dmg-layer', 'hud-practice', 'practice-stats', 'scoreboard', 'toast',
       'hud-left', 'hud-right', 'hud-top', 'hud-elim', 'duel-banner', 'tp-you', 'tp-bot', 'tp-botname', 'tp-round', 'weapon-bar', 'weapon-name',
       'dmgnums', 'match-banner', 'crosshair', 'death-screen', 'ds-name', 'ds-resp', 'nade-hold', 'tp-me', 'net-status',
@@ -88,13 +88,19 @@
     H.el['net-status'].textContent = '';
   };
 
-  /** Health: number + thin bar (everyone has 150, nobody has a shield). */
+  /** Health: number + bar. The bar changes colour with the health left: green -> lime -> yellow -> orange -> red (everyone has 150, nobody has a shield). */
   H.setVitals = function (hp) {
     const v = Math.max(0, Math.ceil(hp));
     if (H.last.hp !== v) {
       H.last.hp = v;
+      const f = Math.max(0, Math.min(1, v / RV.MAX_HP));
       H.el['hp-val'].textContent = v;
-      H.el['hp-fill'].style.width = Math.max(0, Math.min(100, (v / RV.MAX_HP) * 100)) + '%';
+      const fill = H.el['hp-fill'];
+      fill.style.width = f * 100 + '%';
+      // hue 0 (red) .. 125 (green); a little eased so the greens last and the last third turns warm quickly
+      const hue = Math.round(125 * Math.pow(f, 1.15));
+      fill.style.background = 'linear-gradient(180deg, hsl(' + hue + ',92%,66%) 0 38%, hsl(' + hue + ',80%,47%) 38% 100%)';
+      H.el['vital-hp'].style.setProperty('--hpc', 'hsl(' + hue + ',92%,62%)');
       H.el['vital-hp'].classList.toggle('low', v <= RV.MAX_HP * 0.3);
     }
   };
@@ -289,17 +295,8 @@
     }
   };
 
-  H.setSpeed = function (speed, top, label) {
-    const v = speed.toFixed(1);
-    setText('spd', H.el['speed-val'], v);
-    const pct = Math.min(100, (speed / 45) * 100) | 0;
-    if (H.last.spct !== pct) {
-      H.last.spct = pct;
-      H.el['speed-fill'].style.width = pct + '%';
-    }
-    setText('top', H.el['top-speed'], 'top ' + top.toFixed(1));
-    setText('state', H.el['state-label'], label);
-  };
+  /** (The speedometer was removed from the HUD at the player's request; the call stays so modes need no change.) */
+  H.setSpeed = function () {};
 
   H.setTitle = (t) => setText('title', H.el['hud-title'], t);
   H.setTimer = (t) => setText('timer', H.el['hud-timer'], t);
