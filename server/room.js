@@ -79,6 +79,7 @@ function makePlayer(client, seat, world) {
     seqDone: 0,
     budget: 0,
     budgetT: 0,
+    owing: false, // input was still waiting at the end of the last advance(): time that passes now is owed to the player
     allowBase: 0, // the speed-hack limit counts from here: steps received so far at allowT0 ...
     allowT0: 0, // ... and the wall clock (ms) when counting began
     lastRun: null,
@@ -149,6 +150,10 @@ class Room {
   opp(p) {
     return this.p[1 - p.seat];
   }
+  /** The number a player's input and actions must carry: the round (the free-for-all room, ffa.js, uses the player's own life). */
+  roundOf(p) {
+    return this.round;
+  }
   playerOf(client) {
     return this.p[client.seat];
   }
@@ -199,7 +204,7 @@ class Room {
   /** A batch of input: queued, then simulated as fast as real time allows. */
   onInput(p, m, t) {
     if (!p.alive || p.away) return;
-    if (m.rn !== this.round || (this.phase !== 'live' && this.phase !== 'ended')) return; // a stale batch from the last round
+    if (m.rn !== this.roundOf(p) || (this.phase !== 'live' && this.phase !== 'ended')) return; // a stale batch from the last round
     if (m.q !== p.recvSeq) {
       this.violate(p, m.q < p.recvSeq ? 'seq_dup' : 'seq_gap', { got: m.q, want: p.recvSeq });
       return;
@@ -207,6 +212,9 @@ class Room {
     // speed-hack limit: a real client produces 120 steps a second of real time, so what it has sent can never be
     // more than the round clock allows (plus a few seconds of slack that cover network stalls delivering a lump)
     const allowed = p.allowBase + ((t - p.allowT0) / 1000) * N.HZ + CFG.MOVE.INPUT_SLACK_STEPS;
+    // a full queue with the client inside the round clock means the SERVER is behind (a stalled event loop, a slow host):
+    // work the backlog off first, and only flag it if it is still full afterwards (that is real flooding)
+    if (p.recvSeq + m.steps <= allowed && p.qSteps + m.steps > CFG.MOVE.INPUT_QUEUE_MAX) this.advance(p, t);
     if (p.recvSeq + m.steps > allowed || p.qSteps + m.steps > CFG.MOVE.INPUT_QUEUE_MAX) {
       this.violate(p, 'input_overflow', { queued: p.qSteps, adding: m.steps, ahead: Math.round(p.recvSeq + m.steps - allowed) });
       return;
@@ -254,7 +262,7 @@ class Room {
   /** A discrete request. It is executed when the simulation has reached the step the client sent it at. */
   onAct(p, m, t) {
     if (m.a === 'fire') p.tele.fireActs++;
-    if (m.rn !== this.round) {
+    if (m.rn !== this.roundOf(p)) {
       this.drop(p, 'stale_round');
       return;
     }
@@ -308,7 +316,12 @@ class Room {
     // otherwise the player's avatar would stay late for the rest of the round. The speed-hack limit in onInput bounds
     // how much input can exist at all, so this cannot be used to run faster than the clock in total.
     const rate = N.HZ * (p.qSteps > CFG.MOVE.CATCHUP_MIN_STEPS ? CFG.MOVE.CATCHUP : 1);
-    p.budget = Math.min(CFG.MOVE.INPUT_BURST_STEPS, p.budget + ((t - p.budgetT) / 1000) * rate);
+    // The credit is capped so that a stall on the CLIENT's side (nothing arrives, then a lump) cannot become a burst of
+    // movement. But if input was already waiting when the time passed, the delay was the server's own (an event loop that
+    // did not run for a while): that time is owed, so it is paid back instead of being thrown away - otherwise every
+    // stall would add to a permanent backlog until the queue overflows.
+    const cap = p.owing ? Math.max(CFG.MOVE.INPUT_BURST_STEPS, p.qSteps) : CFG.MOVE.INPUT_BURST_STEPS;
+    p.budget = Math.min(cap, p.budget + ((t - p.budgetT) / 1000) * rate);
     p.budgetT = t;
     this.runActs(p, t);
     this.checkClaim(p);
@@ -325,6 +338,7 @@ class Room {
       this.runActs(p, t);
       this.checkClaim(p);
     }
+    p.owing = p.q.length > 0 && p.budget < 1;
     this.recordHist(p, t);
   }
 
@@ -771,6 +785,7 @@ class Room {
       p.pl.frozen = false;
       p.budget = 6;
       p.budgetT = t;
+      p.owing = false;
       p.allowBase = p.recvSeq;
       p.allowT0 = t;
       p.protUntil = CFG.SPAWN_PROTECT_S > 0 ? t + CFG.SPAWN_PROTECT_S * 1000 : 0;
@@ -897,6 +912,7 @@ class Room {
     p.claims.length = 0;
     p.fixId++;
     p.budgetT = now();
+    p.owing = false;
     p.allowBase = p.recvSeq; // the speed-hack limit starts over from the server's state (the clocks stood still while away)
     p.allowT0 = p.budgetT;
     if (wasAway) {
@@ -1140,4 +1156,4 @@ class Room {
   }
 }
 
-module.exports = { Room, PH };
+module.exports = { Room, PH, makePlayer, freshTele, EYE, HW, modeId, r3, clamp };

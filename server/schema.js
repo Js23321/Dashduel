@@ -29,6 +29,10 @@ const TYPES = {
     return isNum(m.ts) ? { t: 'spong', ts: m.ts } : null;
   },
   queue: simple('queue'),
+  /** Join the free-for-all room of a map (an always-running open room). */
+  ffa(m) {
+    return typeof m.map === 'string' && /^[a-z0-9_]{2,24}$/.test(m.map) ? { t: 'ffa', map: m.map } : null;
+  },
   unqueue: simple('unqueue'),
   ready: simple('ready'),
   leave: simple('leave'),

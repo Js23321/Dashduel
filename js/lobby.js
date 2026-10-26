@@ -28,7 +28,7 @@
     ['avatar', 'You', 'Name & stats'],
   ];
   const AV_COLORS = [0xe5484d, 0x3b82f6, 0x22c55e, 0xf59e0b, 0xa855f7, 0x14b8a6, 0xec4899, 0xf97316];
-  const MODE_BLURB = { duel: ['Duel', '1v1 against an AI'], arena: ['Deathmatch', 'Free-for-all vs bots'], timetrial: ['Time Trial', 'Race the checkpoints'] };
+  const MODE_BLURB = { duel: ['Duel', '1v1 against an AI'], arena: ['Deathmatch', 'Offline vs several bots'], timetrial: ['Time Trial', 'Race the checkpoints'] };
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   let R, scene, cam, dome, portal, portalMat, halo, portalOrbit, screenMesh, screenCtx, screenTex, avatar, stands, glow, cone, envRT;
@@ -657,6 +657,7 @@
       h += '<div class="lb-cols"><div class="lb-col">';
       h += '<div class="eyebrow">Play online</div>';
       h += '<button class="lb-big" data-act="find"><b>' + (q === 'searching' ? 'Searching…' : 'Find online match') + '</b><small>Online 1v1 · first to 5 · server-run</small></button>';
+      h += '<button class="lb-big" data-act="ffa"><b>Free-for-all</b><small>Open server · join any time · up to 12 players</small></button>';
       h += '<div class="lb-conn" data-state="' + L.status.state + '"><i class="dot"></i><span>' + esc(L.status.state === 'ok' ? 'Online · ' + L.status.ms + ' ms' + (L.status.online != null ? ' · ' + L.status.online + ' playing' : '') : L.status.state === 'down' ? 'Server not reachable' : L.status.state === 'none' ? 'No server configured' : 'Checking…') + '</span><button class="lb-link" data-act="probe">Check again</button></div>';
       if (L.status.state === 'down' || L.status.state === 'none') h += '<p class="lb-note">Offline modes still work.</p>';
       h += '</div><div class="lb-col"><div class="eyebrow">Or play offline</div><div class="lb-modes">';
@@ -702,6 +703,9 @@
         break;
       case 'find':
         UI.launch('online');
+        break;
+      case 'ffa':
+        UI.launch('ffa');
         break;
       case 'mode':
         UI.launch(el.dataset.mode);

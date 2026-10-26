@@ -161,6 +161,8 @@
           if (m.tok) saveTok(m.tok); // a new session: keep the token so a dropped connection can come back to this match
           NC.online = m.online || 0;
           NC.queued = m.queued || 0;
+          NC.ffa = m.ffa || {};
+          NC.ffaCap = m.ffaCap || 12;
           NC.pingT = setInterval(() => NC.send({ t: 'ping', ts: performance.now() }), 2000);
           NC.send({ t: 'ping', ts: performance.now() });
           status();
@@ -255,7 +257,7 @@
         if (m.t === 'welcome') {
           info = m;
           ws.send(JSON.stringify({ t: 'ping', ts: performance.now() }));
-        } else if (m.t === 'pong' && info) finish({ ok: true, ms: Math.round(performance.now() - m.ts), connectMs: Math.round(performance.now() - t0), online: info.online, queued: info.queued });
+        } else if (m.t === 'pong' && info) finish({ ok: true, ms: Math.round(performance.now() - m.ts), connectMs: Math.round(performance.now() - t0), online: info.online, queued: info.queued, ffa: info.ffa || {}, ffaCap: info.ffaCap || 12 });
         else if (m.t === 'err') finish({ ok: false, error: m.msg || 'The server refused the connection.' });
       };
     });

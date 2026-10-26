@@ -13,6 +13,11 @@
  *     says happened: hit markers, damage numbers and your health appear when the server confirms them.
  *   - If the connection drops it keeps the match for you (the server waits a few seconds) and reconnects with its
  *     session token. There is no simulated opponent: without a server, online play says so and stops.
+ *
+ * The same client also plays the FREE-FOR-ALL (mode 'ffa'): one always-running open room per map on the server, up to a dozen players, no
+ * rounds. Everything above holds (prediction, input stream, corrections, the server decides every hit); what differs is that there are many
+ * remote players (one RemotePlayer each, shown only while the server says they can be seen), a respawn a couple of seconds after a death,
+ * a kill feed and a scoreboard of the whole room (see the FFA section below).
  */
 (function () {
   'use strict';
@@ -27,6 +32,7 @@
   const INTERP_MS = 100;
   const FLUSH_DT = 1 / 30; // input batches per second
   const SLOT_ID = ['rifle', 'pistol', 'fists', 'fists'];
+  const FFA_COLOURS = [0x3ec5ff, 0xff6b6b, 0xffd166, 0x06d6a0, 0xc77dff, 0xff9f43, 0x4dd0e1, 0xa3e635, 0xf472b6, 0x93c5fd, 0xfca5a5, 0xfde68a];
   const RECONNECT_MS = 16000;
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d || 0);
@@ -53,6 +59,15 @@
     prot: 0, // seconds of spawn protection I have left (the server decides; this only drives the HUD)
     mapId: null,
     ui: null,
+    // free-for-all
+    ffa: false, // the current session is a free-for-all room
+    myId: -1, // my slot in the room
+    remotes: {}, // slot -> RemotePlayer
+    names: {}, // slot -> name (from the board)
+    board: [], // [[slot, name, kills, deaths, alive, rtt]]
+    respawnT: 0, // seconds until the server puts me back (while dead)
+    cap: 12,
+    killLimit: 25,
     // input stream (prediction / reconciliation)
     seq: 0, // steps executed and recorded this round
     sent: 0, // steps already sent to the server
@@ -74,9 +89,10 @@
   // the opponent as the rest of the game sees it (driven by server snapshots)
   // ---------------------------------------------------------------------------
   class RemotePlayer {
-    constructor(g, name) {
+    constructor(g, name, idx) {
       this.g = g;
       this.net = true;
+      this.idx = idx == null ? -1 : idx; // the slot of a free-for-all player (-1: the 1v1 opponent)
       this.dummy = false;
       this.name = name;
       this.hp = RV.MAX_HP;
@@ -94,7 +110,7 @@
       this.flash = 0;
       this.body = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, hw: 0.38, h: 1.85, grounded: true };
       this.buf = [];
-      this.mesh = RV.render.createBotMesh(0x3ec5ff, 'rifle', 3);
+      this.mesh = RV.render.createBotMesh(idx == null ? 0x3ec5ff : FFA_COLOURS[idx % FFA_COLOURS.length], 'rifle', 3);
       this.mesh.setName(name, '#ffffff');
       this.mesh.group.visible = false;
       this.mesh.bar.visible = false; // no health bar on a real opponent
@@ -110,7 +126,7 @@
 
     /** A snapshot of the opponent: either full state (visible) or just "hidden" (no position was sent). */
     push(o) {
-      O.oppAlive = !!o.al;
+      if (this.idx < 0) O.oppAlive = !!o.al;
       if (o.hid) {
         this.hidden = true;
         this.alive = false;
@@ -192,11 +208,24 @@
       this.dist = Math.hypot(s.x - e.x, s.y - e.y, s.z - e.z);
     }
 
+    /** (free-for-all) the server does not list this player in this snapshot: it cannot be seen. */
+    hide() {
+      this.hidden = true;
+      this.alive = false;
+      this.buf.length = 0;
+      this.mesh.group.visible = false;
+    }
+
     /** Damage is decided by the server: nothing happens here. */
     damage() {
       return false;
     }
   }
+
+  /** Is this game one of the two networked modes? */
+  O.isNet = function (g) {
+    return !!g && (g.mode === 'online' || g.mode === 'ffa');
+  };
 
   // ---------------------------------------------------------------------------
   // queue + match start
@@ -210,6 +239,7 @@
   /** ui: {onStatus(text, phase), onMatched(opp), onReady(opp), onError(text)} */
   O.queue = async function (ui) {
     O.cancelQueue();
+    O.ffa = false;
     O.ui = ui;
     O.queueing = true;
     O.matched = false;
@@ -236,7 +266,8 @@
   };
 
   O.refreshStatus = function () {
-    if (O.queueing && O.ui && NC.state === 'open') O.ui.onStatus('Searching for an opponent… ' + NC.describe() + (NC.queued ? ' · ' + NC.queued + ' in queue' : ''), 'searching');
+    if (O.ffa && O.queueing && O.ui && NC.state === 'open') O.ui.onStatus('Joining the free-for-all… ' + NC.describe(), 'joining');
+    else if (O.queueing && O.ui && NC.state === 'open') O.ui.onStatus('Searching for an opponent… ' + NC.describe() + (NC.queued ? ' · ' + NC.queued + ' in queue' : ''), 'searching');
   };
 
   O.cancelQueue = function () {
@@ -282,7 +313,12 @@
     O.started = false;
     O.phase = 'idle';
     O.sx = O.sy = O.sz = 0;
-    setTimeout(() => NC.close(), 150);
+    // (close the socket this leave went out on once the message has had time to leave; a new connection opened in the meantime - "find a new
+    // match" / "rejoin" right after leaving - is a different socket and must not be closed by this)
+    const ws = NC.ws;
+    setTimeout(() => {
+      if (NC.ws === ws) NC.close();
+    }, 150);
   };
   window.addEventListener('pagehide', () => {
     if (NC.state === 'open' && O.started && O.phase !== 'over') NC.send({ t: 'leave' });
@@ -305,6 +341,19 @@
   // ---------------------------------------------------------------------------
   // the game mode
   // ---------------------------------------------------------------------------
+  /** The eye position carries the smoothing offset that hides a server correction (a new Player per match). */
+  function hookEye(g) {
+    const pl = g.player;
+    const orig = pl.getEye.bind(pl);
+    pl.getEye = (a, out) => {
+      orig(a, out);
+      out.x += O.sx;
+      out.y += O.sy;
+      out.z += O.sz;
+      return out;
+    };
+  }
+
   const ONLINE = {
     pvp: true,
     canLook: true,
@@ -326,16 +375,7 @@
       O.oppAway = false;
       O.top = 0;
       O.corrections = 0;
-      // the eye position carries the smoothing offset that hides a server correction (a new Player per match)
-      const pl = g.player;
-      const orig = pl.getEye.bind(pl);
-      pl.getEye = (a, out) => {
-        orig(a, out);
-        out.x += O.sx;
-        out.y += O.sy;
-        out.z += O.sz;
-        return out;
-      };
+      hookEye(g);
     },
     reset(g) {
       O.score = { you: 0, opp: 0 };
@@ -543,7 +583,26 @@
   O.onMessage = function (m) {
     const g = G();
     const online = g && g.mode === 'online';
+    const ffa = g && g.mode === 'ffa';
     switch (m.t) {
+      case 'ffa':
+        O.onFfa(m);
+        return;
+      case 'fspawn':
+        if (ffa) O.onFspawn(m);
+        return;
+      case 'fsnap':
+        if (ffa) O.onFsnap(m);
+        return;
+      case 'fboard':
+        if (ffa) O.onBoard(m.l);
+        return;
+      case 'fkf':
+        if (ffa) O.onKillFeed(m);
+        return;
+      case 'fwin':
+        if (ffa) O.onRoundWon(m);
+        return;
       case 'queued':
         O.refreshStatus();
         break;
@@ -563,25 +622,25 @@
         if (online) O.onSnap(m);
         break;
       case 'hurt':
-        if (online) O.onHurt(m);
+        if (online || ffa) O.onHurt(m);
         break;
       case 'hit':
-        if (online) O.onHit(m);
+        if (online || ffa) O.onHit(m);
         break;
       case 'blk':
-        if (online && performance.now() - (O.blkAt || 0) > 400) {
+        if ((online || ffa) && performance.now() - (O.blkAt || 0) > 400) {
           O.blkAt = performance.now();
           RV.hud.toast('Spawn protected', 500);
         }
         break;
       case 'fx':
-        if (online) O.onFx(m);
+        if (online || ffa) O.onFx(m);
         break;
       case 'nade':
-        if (online && RV.grenades.ready) RV.grenades.spawnServer(g, m.p, m.v, !!m.own);
+        if ((online || ffa) && RV.grenades.ready) RV.grenades.spawnServer(g, m.p, m.v, !!m.own);
         break;
       case 'boom':
-        if (online && RV.grenades.ready) RV.grenades.serverBlast(g, m.p, !!m.own);
+        if ((online || ffa) && RV.grenades.ready) RV.grenades.serverBlast(g, m.p, !!m.own);
         break;
       case 'roundEnd':
         if (online) O.applyEnd(m);
@@ -590,7 +649,7 @@
         O.onMatchEnd(m);
         break;
       case 'fix':
-        if (online) O.onFix(m);
+        if (online || ffa) O.onFix(m);
         break;
       case 'opp':
         if (online) O.onOpp(m);
@@ -601,17 +660,18 @@
         else if (RV.ui.rematchMsg) RV.ui.rematchMsg(m.st);
         break;
       case 'warn':
-        if (online) RV.hud.toast(m.msg || 'Warning from the server', 3500);
+        if (online || ffa) RV.hud.toast(m.msg || 'Warning from the server', 3500);
         break;
       case 'err':
         if (!O.started && O.ui) O.ui.onError(m.msg || 'The server refused the connection.');
-        else if (online) RV.hud.toast(m.msg || 'Server error', 3500);
+        else if (online || ffa) RV.hud.toast(m.msg || 'Server error', 3500);
         break;
     }
   };
 
   O.onMatch = function (m) {
     const g = G();
+    O.ffa = false;
     if (O.started && g && g.mode === 'online' && !O.rematching) {
       // the server re-announced the match (we reconnected while it was still waiting for everyone to load): confirm again
       O.reconnecting = false;
@@ -638,7 +698,7 @@
   O.onConnClose = function (reason) {
     const g = G();
     if (O.leaving) return;
-    if (O.started && g && g.mode === 'online' && O.phase !== 'over') {
+    if (O.started && O.isNet(g) && O.phase !== 'over') {
       O.beginReconnect(reason);
     } else if (O.queueing || O.rematching || (O.matched && !O.started)) {
       O.queueing = false;
@@ -670,6 +730,15 @@
         return;
       }
       hookNet();
+      if (O.ffa) {
+        // nothing is kept for a dropped free-for-all player: join the room again (a fresh life; the map is already loaded)
+        NC.send({ t: 'ffa', map: O.mapId });
+        clearTimeout(O.resumeWatch);
+        O.resumeWatch = setTimeout(() => {
+          if (O.reconnecting) O.reconnectFailed('The server did not take you back into the room.');
+        }, 6000);
+        return;
+      }
       // the server now sends `resume` (still in the match) or `matchEnd`; if neither comes the match is gone
       clearTimeout(O.resumeWatch);
       O.resumeWatch = setTimeout(() => {
@@ -687,6 +756,7 @@
     if (O.phase === 'over') return;
     O.phase = 'over';
     O.rematchWindow = 0;
+    if (O.ffa) return O.showFfaResult(g, note, 'Disconnected');
     O.showResult(g, false, note, false, 'Disconnected');
   };
 
@@ -827,7 +897,7 @@
     g.player.frozen = true;
     RV.audio.play('die');
     g.killedBy = { name: name || O.oppName, weapon: '', weaponId: null };
-    RV.hud.killfeed(name || O.oppName, null, RV.profile.display(), 'd');
+    if (!O.ffa) RV.hud.killfeed(name || O.oppName, null, RV.profile.display(), 'd'); // (free-for-all: the server's kill feed message does it)
   };
 
   /** The server says I was hit. */
@@ -839,7 +909,12 @@
     RV.hud.damageFlash();
     RV.hud.addDamageSource(num(m.x), num(m.z));
     RV.audio.play('hurt');
-    if (g.hp <= 0) O.die(g, m.src === 'fall' ? 'the void' : null, m.src);
+    if (g.hp <= 0) {
+      if (O.ffa) {
+        O.respawnT = num(m.rs, 2.5);
+        O.die(g, m.src === 'fall' && !(m.by >= 0) ? 'the void' : O.nameOf(m.by, 'the void'), m.src);
+      } else O.die(g, m.src === 'fall' ? 'the void' : null, m.src);
+    }
   };
 
   /** The server confirms a hit I made: now (and only now) the hit marker + number appear. */
@@ -851,14 +926,16 @@
       kill = !!m.kill;
     g.weapons.hits++;
     g.session.hits++;
-    if (O.remote) O.remote.flash = 0.07;
+    const victim = O.ffa ? O.remotes[m.v] : O.remote;
+    if (victim) victim.flash = 0.07;
     RV.hud.hitMarker(kill);
     RV.hud.damageNumber(dmg, head, kill);
     RV.audio.play(kill ? 'kill' : head ? 'headshot' : 'hit');
     if (kill) {
       g.session.kills++;
-      RV.hud.killfeed(RV.profile.display(), typeof m.src === 'string' ? m.src : null, O.oppName, 'k');
-      RV.hud.eliminated(O.oppName);
+      const vn = O.ffa ? O.nameOf(m.v, 'Player') : O.oppName;
+      if (!O.ffa) RV.hud.killfeed(RV.profile.display(), typeof m.src === 'string' ? m.src : null, vn, 'k');
+      RV.hud.eliminated(vn);
     }
   };
 
@@ -877,7 +954,8 @@
     }
     const w = RV.WEAPON_BY_ID[m.w];
     R().addTracer(o[0] + d[0] * 0.6, o[1] - 0.25 + d[1] * 0.6, o[2] + d[2] * 0.6, e[0], e[1], e[2], (w && w.tracer) || 0xff6b5b, 0.05);
-    const dist = O.remote ? O.remote.dist : 30;
+    const shooter = O.ffa ? O.remotes[m.by] : O.remote;
+    const dist = shooter ? shooter.dist : 30;
     RV.audio.play('botShot', clamp(1.2 - dist / 60, 0.2, 1));
   };
 
@@ -903,6 +981,13 @@
       O.matched = false;
       O.rematching = false;
       if (O.ui) O.ui.onError('The match was cancelled: ' + (m.reason || 'the opponent left') + '.');
+      return;
+    }
+    if (g.mode === 'ffa') {
+      if (O.phase === 'over') return;
+      O.phase = 'over';
+      O.over = true;
+      O.showFfaResult(g, String(m.reason || ''), 'Left the room');
       return;
     }
     if (g.mode !== 'online' || O.phase === 'over') return;
@@ -942,6 +1027,311 @@
       ],
     });
   };
+
+
+  // ===========================================================================
+  // FREE-FOR-ALL: an always-running open room (see server/ffa.js)
+  // ===========================================================================
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => '&#' + c.charCodeAt(0) + ';');
+
+  /** Join the room of a map. ui: the same callbacks as the 1v1 queue screen (onStatus / onMatched / onError). */
+  O.joinFfa = async function (ui, mapId) {
+    O.cancelQueue();
+    O.ui = ui;
+    O.ffa = true;
+    O.mapId = mapId;
+    O.queueing = true;
+    O.matched = false;
+    O.started = false;
+    O.leaving = false;
+    O.rematching = false;
+    ui.onStatus('Connecting to the game server…', 'connecting');
+    hookNet();
+    try {
+      await NC.connect(RV.profile.get());
+    } catch (e) {
+      O.queueing = false;
+      ui.onError(e.message);
+      return;
+    }
+    if (!O.queueing && !O.started) {
+      NC.close();
+      return;
+    }
+    hookNet();
+    NC.send({ t: 'ffa', map: mapId });
+    O.refreshStatus();
+  };
+
+  O.nameOf = function (id, fallback) {
+    return (id >= 0 && O.names[id]) || fallback || 'Player';
+  };
+
+  /** The server accepted us into a room (or took us back into it after a drop). The map still has to load. */
+  O.onFfa = function (m) {
+    const g = G();
+    O.ffa = true;
+    O.cap = Math.max(1, m.cap | 0) || 12;
+    O.killLimit = Math.max(1, m.kl | 0) || 25;
+    O.myId = m.you | 0;
+    O.onBoard(m.l);
+    if (O.started && g && g.mode === 'ffa') {
+      // joined again after a drop (or from another window): the map is loaded, only a new life is needed
+      O.reconnecting = false;
+      O.connLost = false;
+      clearTimeout(O.resumeWatch);
+      NC.send({ t: 'ready' });
+      return;
+    }
+    O.mapId = m.map;
+    O.matched = true;
+    O.queueing = false;
+    if (O.ui) O.ui.onMatched('Free-for-all');
+    O.enterFfa();
+  };
+
+  O.enterFfa = function () {
+    if (O.started) return;
+    O.started = true;
+    O.leaving = false;
+    const gesture = !!(navigator.userActivation && navigator.userActivation.isActive);
+    if (RV.settings.fullscreen && gesture) RV.enterFullscreen();
+    const begin = () => {
+      if (!O.started || !O.ffa) return; // (left while the map was loading)
+      RV.game.start('ffa', O.mapId, {});
+      RV.game.awaitLock = !RV.input.noLock;
+      NC.send({ t: 'ready' }); // only now does the server put us into the world
+    };
+    if (RV.loadMeshes) RV.loadMeshes(O.mapId).then(begin, begin);
+    else begin();
+  };
+
+  /** A remote player of the room (created the first time the server lists them). */
+  O.remoteFor = function (id) {
+    let r = O.remotes[id];
+    if (!r) {
+      const g = G();
+      r = new RemotePlayer(g, O.nameOf(id, 'Player'), id);
+      O.remotes[id] = r;
+      g.bots.push(r);
+    }
+    return r;
+  };
+
+  O.removeRemote = function (id) {
+    const r = O.remotes[id];
+    if (!r) return;
+    delete O.remotes[id];
+    const g = G();
+    const i = g.bots.indexOf(r);
+    if (i >= 0) g.bots.splice(i, 1);
+    RV.render.removeBotMesh(r.mesh);
+  };
+
+  /** The room's player list: [[slot, name, kills, deaths, alive, rtt]]. Also tells which remote players are gone / renamed. */
+  O.onBoard = function (list) {
+    O.board = (Array.isArray(list) ? list : []).map((r) => ({ id: r[0] | 0, name: RV.profile.clean(r[1]) || 'Player', kills: r[2] | 0, deaths: r[3] | 0, alive: !!r[4], rtt: r[5] | 0 }));
+    O.names = {};
+    for (const r of O.board) O.names[r.id] = r.name;
+    const g = G();
+    if (g && g.mode === 'ffa') {
+      for (const k of Object.keys(O.remotes)) {
+        const id = +k;
+        if (!(id in O.names) || id === O.myId) O.removeRemote(id);
+        else if (O.remotes[id].name !== O.names[id]) {
+          O.remotes[id].name = O.names[id];
+          O.remotes[id].mesh.setName(O.names[id], '#ffffff');
+        }
+      }
+    }
+  };
+
+  /** The server put me (back) into the world: a new life with its own number. */
+  O.onFspawn = function (m) {
+    const g = G();
+    const pl = g.player;
+    const first = O.phase === 'wait';
+    O.spawns = (O.spawns || 0) + 1; // (how many times the server has put me into the world)
+    O.round = m.rn | 0;
+    O.phase = 'live';
+    O.over = false;
+    O.respawnT = 0;
+    O.roundT = 0;
+    const sp = g.map.spawns[m.sp | 0];
+    if (sp) pl.reset(sp.x, sp.y, sp.z, sp.yaw, 0);
+    pl.autoHop = RV.settings.autoHop;
+    O.resetStream();
+    O.fixApplied = m.fx | 0;
+    if (Array.isArray(m.st) && pl.setState(m.st)) {
+      pl.prevX = pl.b.x;
+      pl.prevY = pl.b.y;
+      pl.prevZ = pl.b.z;
+    }
+    pl.frozen = false;
+    g.acc = 0;
+    g.refreshVitals();
+    g.playerDead = false;
+    g.killedBy = null;
+    g.hist.length = 0;
+    g.weapons.refill();
+    RV.grenades.clear();
+    O.top = Math.max(O.top || 0, pl.maxSpeed || 0);
+    O.prot = num(m.pr, 0);
+    for (const k of Object.keys(O.remotes)) O.remotes[k].reset();
+    RV.hud.centerHide();
+    RV.hud.deathScreen(false);
+    RV.hud.hint('');
+    RV.audio.play(first ? 'go' : 'respawn');
+    if (first) RV.hud.center('FIGHT', '#ffffff', true, 650);
+  };
+
+  /** 30 Hz: my own authoritative state and the players the server says I can see. */
+  O.onFsnap = function (m) {
+    const g = G();
+    if (m.rn !== O.round) return;
+    if (typeof m.a === 'number') O.ack(m.a);
+    O.prot = typeof m.pr === 'number' ? Math.max(0, m.pr) : 0;
+    if (typeof m.hp === 'number' && !g.playerDead) {
+      g.hp = clamp(m.hp, 0, RV.MAX_HP);
+      if (g.hp <= 0) {
+        O.respawnT = Math.max(O.respawnT, 2.5);
+        O.die(g, 'someone', null);
+      }
+    }
+    const w = g.weapons;
+    if (typeof m.gr === 'number') {
+      w.grenades = m.gr;
+      if (m.gr === 0 && typeof m.gc === 'number') w.gregen = m.gc;
+    }
+    const seen = {};
+    const list = Array.isArray(m.os) ? m.os : [];
+    for (const e of list) {
+      if (!Array.isArray(e) || e.length < 11) continue;
+      const id = e[0] | 0;
+      if (id === O.myId) continue;
+      seen[id] = true;
+      O.remoteFor(id).push({ x: e[1], y: e[2], z: e[3], yw: e[4], pt: e[5], sp: e[6], gr: e[7], m: e[8], w: e[9], pr: e[10], al: 1 });
+    }
+    for (const k of Object.keys(O.remotes)) if (!seen[k]) O.remotes[k].hide();
+  };
+
+  /** Somebody was eliminated (told to everybody in the room). */
+  O.onKillFeed = function (m) {
+    const killer = m.k >= 0 ? O.nameOf(m.k, 'Player') : 'The void';
+    const victim = O.nameOf(m.v, 'Player');
+    const mineK = m.k === O.myId,
+      mineV = m.v === O.myId;
+    RV.hud.killfeed(mineK ? RV.profile.display() : killer, typeof m.w === 'string' && RV.icons[m.w] ? m.w : null, mineV ? RV.profile.display() : victim, mineV ? 'd' : mineK ? 'k' : '');
+  };
+
+  /** Somebody reached the kill limit: the scores of the room start over. */
+  O.onRoundWon = function (m) {
+    const me = m.i === O.myId;
+    RV.hud.center(me ? 'YOU WIN THE ROUND' : esc(String(m.n || 'Someone')).toUpperCase() + ' WINS', me ? '#a3e635' : '#ffffff', true, 2200);
+    RV.audio.play(me ? 'finish' : 'beep');
+    RV.hud.toast((me ? 'You' : m.n) + ' won the round with ' + (m.k | 0) + ' eliminations · scores reset', 4200);
+    const g = G();
+    if (g && g.session) g.session.kills = 0;
+  };
+
+  /** The room removed me (inactive, did not load, the connection could not be restored) or the server closed it. */
+  O.showFfaResult = function (g, note, title) {
+    const s = g.session;
+    const mine = O.board.find((r) => r.id === O.myId);
+    const kills = mine ? mine.kills : s.kills,
+      deaths = mine ? mine.deaths : s.deaths;
+    const acc = s.shots ? Math.round((s.hits / s.shots) * 100) : 0;
+    g.menuOpen = false;
+    g.setState('results');
+    RV.input.exitLock();
+    RV.audio.loop('wind', 0);
+    RV.audio.loop('slide', 0);
+    RV.audio.loop('wallrun', 0);
+    RV.hud.deathScreen(false);
+    RV.ui.showResults({
+      online: true,
+      ffa: true,
+      rematch: false,
+      title: title || 'Left the room',
+      big: kills + ' elims',
+      sub: g.map.name + ' · free-for-all' + (note ? ' · ' + esc(note) : ''),
+      rows: [
+        ['Deaths', String(deaths)],
+        ['K / D', (deaths ? kills / deaths : kills).toFixed(2)],
+        ['Accuracy', acc + '%  (' + s.hits + '/' + s.shots + ')'],
+        ['Server', NC.state === 'open' ? NC.describe() : 'disconnected'],
+      ],
+    });
+  };
+
+  const FFA = {
+    pvp: true,
+    canLook: true,
+    realtime: true,
+    canShoot() {
+      return O.phase === 'live' && !O.connLost && !G().playerDead;
+    },
+    botsActive() {
+      return true;
+    },
+    init(g) {
+      g.nav = null;
+      g.clearBots();
+      O.remotes = {};
+      O.flushAcc = 0;
+      O.netHudAcc = 0;
+      O.top = 0;
+      O.corrections = 0;
+      hookEye(g);
+    },
+    reset(g) {
+      O.round = 0;
+      O.phase = 'wait';
+      O.t = 0;
+      O.respawnT = 0;
+      O.over = false;
+      O.resetStream();
+      const sp = g.map.spawns[0];
+      g.player.reset(sp.x, sp.y, sp.z, sp.yaw, 0);
+      g.player.autoHop = RV.settings.autoHop;
+      g.player.frozen = true; // not in the world until the server spawns us
+      for (const k of Object.keys(O.remotes)) O.remotes[k].reset();
+    },
+    hudSetup(g) {
+      RV.hud.setTitle('Free-for-all · ' + g.map.name);
+      RV.hud.setSub('');
+      RV.hud.duel(false);
+      RV.hud.hint('Joining the room…');
+    },
+    fixedStep(g) {
+      O.recordStep(g);
+    },
+    onPlayerDeath() {},
+    frame(g, dt) {
+      O.tick(g, dt);
+      if (g.playerDead && O.respawnT > 0) O.respawnT -= dt;
+    },
+    respawnIn() {
+      return Math.max(0, O.respawnT);
+    },
+    hud(g) {
+      const mine = O.board.find((r) => r.id === O.myId);
+      RV.hud.setTimer(O.killLimit + ' to win');
+      RV.hud.setSub('Elims ' + (mine ? mine.kills : g.session.kills) + ' · Deaths ' + (mine ? mine.deaths : g.session.deaths) + ' · ' + O.board.length + '/' + O.cap + ' players');
+      RV.hud.markerHide();
+      if (RV.input.isDown('scoreboard')) {
+        const rows = O.board.slice().sort((a, b) => b.kills - a.kills || a.deaths - b.deaths || a.id - b.id);
+        let html = '<table><tr><th>Player</th><th>Elims</th><th>Deaths</th><th>Ping</th></tr>';
+        for (const r of rows) html += '<tr' + (r.id === O.myId ? ' class="me"' : '') + '><td>' + esc(r.name) + '</td><td>' + r.kills + '</td><td>' + r.deaths + '</td><td>' + (r.rtt || '') + '</td></tr>';
+        html += '</table><div class="fine">first to ' + O.killLimit + ' · ' + (O.connLost ? 'reconnecting…' : NC.describe()) + '</div>';
+        RV.hud.scoreboard(true, html);
+      } else RV.hud.scoreboard(false);
+    },
+    stop() {
+      O.leave();
+    },
+  };
+  RV.modes.ffa = FFA;
 
   // ---------------------------------------------------------------------------
   // client -> server (the game code calls these; they only REQUEST things, and any direction argument is ignored)

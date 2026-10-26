@@ -19,6 +19,8 @@
     { id: 'weapon3', label: 'Slot 3: Fists', group: 'Weapons' },
     { id: 'weapon4', label: 'Slot 4: Grenade', group: 'Weapons' },
     { id: 'lastweapon', label: 'Previous weapon', group: 'Weapons' },
+    { id: 'quickmelee', label: 'Quick melee: fists out, one punch, back to your weapon', group: 'Weapons' },
+    { id: 'quickgrenade', label: 'Quick grenade: throw one, back to your weapon', group: 'Weapons' },
     { id: 'restart', label: 'Quick restart', group: 'Game' },
     { id: 'respawn', label: 'Back to checkpoint / spawn', group: 'Game' },
     { id: 'setspawn', label: 'Practice: set spawn point', group: 'Game' },
@@ -40,7 +42,9 @@
     weapon2: ['Digit2', ''],
     weapon3: ['Digit3', ''],
     weapon4: ['Digit4', ''],
-    lastweapon: ['KeyF', ''],
+    lastweapon: ['KeyV', ''],
+    quickmelee: ['KeyF', ''],
+    quickgrenade: ['KeyG', ''],
     restart: ['KeyT', ''],
     respawn: ['KeyQ', ''],
     setspawn: ['KeyE', ''],
@@ -64,7 +68,7 @@
     username: '', // chosen by the player (3-16 characters); shown to opponents in online matches
     startWeapon: 0, // slot equipped at the start of every life (0 = rifle .. 3 = grenade)
     uiVer: 2, // bumped when the interface was redesigned (resets the crosshair to its new default)
-    bindsVer: 3, // 3: there is no sprint key and Shift slides (saved bindings from before get that one change)
+    bindsVer: 4, // 3: there is no sprint key and Shift slides; 4: F = quick melee, G = quick grenade (previous weapon moved to V)
     // view
     fov: 100,
     fovKick: true,
@@ -183,8 +187,17 @@
           // older saves: Shift was Sprint and Ctrl / C slid. Now you always run and Shift slides.
           for (const id in RV.settings.binds) for (let i = 0; i < 2; i++) if (RV.settings.binds[id][i] === 'ShiftLeft') RV.settings.binds[id][i] = '';
           RV.settings.binds.slide = RV.DEFAULT_BINDS.slide.slice();
-          RV.settings.bindsVer = RV.DEFAULT_SETTINGS.bindsVer;
         }
+        if (!(saved.bindsVer >= 4)) {
+          // F and G are the quick melee / quick grenade keys now: whatever an older save had on them (F was "previous weapon") moves away
+          for (const id in RV.settings.binds) {
+            if (id === 'quickmelee' || id === 'quickgrenade') continue;
+            const b = RV.settings.binds[id];
+            for (let i = 0; i < 2; i++) if (b[i] === 'KeyF' || b[i] === 'KeyG') b[i] = '';
+            if (id === 'lastweapon' && !b[0] && !b[1]) RV.settings.binds[id] = RV.DEFAULT_BINDS[id].slice();
+          }
+        }
+        if (!(saved.bindsVer >= RV.DEFAULT_SETTINGS.bindsVer)) RV.settings.bindsVer = RV.DEFAULT_SETTINGS.bindsVer;
       }
     },
     save() {

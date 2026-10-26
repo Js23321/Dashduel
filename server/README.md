@@ -21,6 +21,7 @@ Run **one** instance: rooms live in this process's memory.
 | `sessions.js` | session ids and HMAC-signed tokens (reconnect), expiry sweep |
 | `schema.js` | strict validation of every client message (types, ranges, lengths, unknown fields dropped) |
 | `room.js` | one match: input simulation, reconciliation, weapons, lag-compensated hits, grenades, visibility, reconnect, rematch |
+| `ffa.js` | the free-for-all: one always-running open room per map (join any time, respawns, kill limit, scoreboard); reuses room.js's movement / lag-compensation / visibility code |
 | `anticheat.js` | violation scoring (weights, decay), warn / kick / lockout, rule table |
 | `log.js` | structured JSON logging with secret redaction, security-event ring |
 | `shared.js` | loads the game's own `js/` simulation files (physics, collision, maps incl. every `mapdata-*.js`, weapons, wire format) |

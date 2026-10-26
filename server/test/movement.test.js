@@ -252,6 +252,30 @@ test('a network stall that delivers 2 s of input in one lump is not punished, an
   m.b.close();
 });
 
+test('a stalled server loop does not become a permanent backlog: the time it lost is paid back (no overflow kick for an honest client)', async () => {
+  const { m, sa } = await match();
+  const before = seen('input_overflow');
+  // 2.5 s of input arrives in one go and starts to be worked off ...
+  for (let i = 0; i < 5; i++) sa.step(60, { fw: 1, sprint: true });
+  sa.flush(true);
+  await sleep(150);
+  const d0 = await dbg(m.a);
+  assert.ok(d0.q > 200, 'a backlog is waiting (' + d0.q + ' steps)');
+  // ... then the server's event loop does not run for 1.2 s (a GC pause, a throttled host, a busy machine)
+  const t = Date.now();
+  while (Date.now() - t < 1200) {
+    /* blocked */
+  }
+  await sleep(120);
+  const d1 = await dbg(m.a);
+  // 1.2 s at 1.5x is ~216 steps of owed time: it must be used, not thrown away down to the 45-step burst
+  assert.ok(d1.a - d0.a >= 150, 'the server caught up by ' + (d1.a - d0.a) + ' steps after the stall (it was owed ~216)');
+  assert.strictEqual(seen('input_overflow'), before, 'no overflow violation');
+  assert.ok(!m.a.closed, 'and the player is not kicked');
+  m.a.close();
+  m.b.close();
+});
+
 test('a sustained speed-up (input at ~2x real time) is caught once it is ahead of the clock by more than the slack', async () => {
   const { m, sa } = await match();
   const before = seen('input_overflow');

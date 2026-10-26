@@ -81,7 +81,8 @@ function debugAllowed(req) {
 }
 
 function roomSummaries(lobby) {
-  return [...lobby.rooms].map((r) => ({ id: r.id, map: r.mapId, phase: r.phase, round: r.round, score: r.score, players: r.p.map((p) => ({ sid: p.sid.slice(0, 6), alive: p.alive, away: p.away, hp: p.hp, queued: p.qSteps, simSteps: p.seqDone, violations: p.tele.violations, corrections: p.tele.fixes, shots: p.tele.shots, fireActs: p.tele.fireActs, drops: p.tele.drops })) }));
+  const ffa = [...lobby.ffa.values()].map((r) => Object.assign(r.summary(), { ffa: true, list: r.p.map((p) => ({ sid: p.sid.slice(0, 6), seat: p.seat, alive: p.alive, waiting: p.waiting, kills: p.kills, deaths: p.deaths, queued: p.qSteps, simSteps: p.seqDone, violations: p.tele.violations, corrections: p.tele.fixes, shots: p.tele.shots, fireActs: p.tele.fireActs, drops: p.tele.drops })) }));
+  return ffa.concat([...lobby.rooms].map((r) => ({ id: r.id, map: r.mapId, phase: r.phase, round: r.round, score: r.score, players: r.p.map((p) => ({ sid: p.sid.slice(0, 6), alive: p.alive, away: p.away, hp: p.hp, queued: p.qSteps, simSteps: p.seqDone, violations: p.tele.violations, corrections: p.tele.fixes, shots: p.tele.shots, fireActs: p.tele.fireActs, drops: p.tele.drops })) })));
 }
 
 function createServer() {

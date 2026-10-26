@@ -14,7 +14,7 @@
   });
 
   const SCREENS = ['main', 'select', 'settings', 'loadout', 'records', 'help', 'pause', 'results', 'name', 'queue', 'error'];
-  const MODE_NAMES = { online: 'Online 1v1', duel: 'Duel', arena: 'Deathmatch', timetrial: 'Time Trial', practice: 'Practice' };
+  const MODE_NAMES = { online: 'Online 1v1', ffa: 'Free-for-all (online)', duel: 'Duel', arena: 'Deathmatch', timetrial: 'Time Trial', practice: 'Practice' };
 
   UI.hideAll = function () {
     for (const s of SCREENS) $('scr-' + s).classList.add('hidden');
@@ -41,8 +41,9 @@
     $('btn-fullscreen').textContent = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
     const online = !!(g.modeImpl && g.modeImpl.realtime);
     $('btn-restart').classList.toggle('hidden', online); // a live online match cannot be restarted
-    $('btn-quit').textContent = online ? 'Leave match (forfeit)' : 'Return to lobby';
-    $('pause-title').textContent = online ? 'Menu (match still running)' : 'Match paused';
+    const ffa = g.mode === 'ffa';
+    $('btn-quit').textContent = ffa ? 'Leave the free-for-all' : online ? 'Leave match (forfeit)' : 'Return to lobby';
+    $('pause-title').textContent = online ? (ffa ? 'Menu (the room keeps playing)' : 'Menu (match still running)') : 'Match paused';
     UI.settingsOpenFromPause = false;
     UI.loadoutFromPause = false;
     UI.show('pause');
@@ -77,10 +78,7 @@
     else if (c === 'name') {
       if (RV.profile.get()) UI.show('main');
     } else if (c === 'select' || c === 'records' || c === 'help') UI.show('main');
-    else if (c === 'pause') {
-      RV.input.requestLock();
-      if (RV.input.noLock) RV.game.resume();
-    }
+    else if (c === 'pause') RV.game.resumeRequest();
   };
 
   UI.onKey = function (e) {
@@ -121,8 +119,18 @@
     else UI.openSelect(mode);
   };
 
+  /** Join the always-running free-for-all room of a map (asks for a name first). */
+  UI.startFfa = function (mapId) {
+    UI.ffaMap = mapId;
+    UI.requireName(() => {
+      UI.rematchActive = false;
+      RV.online.joinFfa(queueScreen('Joining the free-for-all', 'Try again'), mapId);
+    });
+  };
+
   /** Start a game right away with the saved options. */
   UI.quickStart = function (mode, map) {
+    if (mode === 'ffa') return UI.startFfa(map);
     RV.audio.init();
     if (RV.settings.fullscreen) RV.enterFullscreen();
     RV.game.start(mode, map, {
@@ -160,6 +168,8 @@
       } else if (mode === 'timetrial') {
         const r = RV.records.tt(id);
         meta = '<span>Best <b>' + RV.fmtTime(r.best) + '</b></span><span>Top <b>' + (r.topSpeed ? r.topSpeed.toFixed(1) : '--') + '</b> m/s</span>';
+      } else if (mode === 'ffa') {
+        meta = '<span>Open server · join any time</span><span class="ffa-n" data-map="' + id + '">players: …</span>';
       } else if (mode === 'arena') {
         const r = RV.records.arena(id);
         meta = '<span>Best <b>' + r.bestKills + '</b> elims</span><span>Wins <b>' + r.wins + '</b>/' + r.matches + '</span>';
@@ -177,6 +187,7 @@
       });
       box.appendChild(card);
     }
+    if (mode === 'ffa') UI.fillFfaCounts();
     $('arena-opts').classList.toggle('hidden', mode !== 'arena');
     $('duel-opts').classList.toggle('hidden', mode !== 'duel');
     const s = RV.settings;
@@ -186,6 +197,21 @@
     $('out-bots').textContent = s.botCount;
     $('opt-diff').value = s.difficulty;
     $('opt-kills').value = String(s.killLimit);
+  };
+
+  /** The map cards of the free-for-all show how many players are in each room right now (one short probe of the server). */
+  UI.fillFfaCounts = function () {
+    const tag = (res) => {
+      document.querySelectorAll('.ffa-n').forEach((el) => {
+        if (!res || !res.ok) el.textContent = 'server not reachable';
+        else {
+          const n = (res.ffa && res.ffa[el.dataset.map]) || 0;
+          el.innerHTML = 'players: <b>' + n + '</b> / ' + (res.ffaCap || 12);
+        }
+      });
+    };
+    if (!RV.netclient || !RV.netclient.probe) return tag(null);
+    RV.netclient.probe().then(tag, () => tag(null));
   };
 
   // ---------------------------------------------------------------- settings
@@ -616,8 +642,8 @@
         clearInterval(UI.queueTimer);
         UI.rematchActive = false;
         $('queue-opp').textContent = opp;
-        $('queue-title').textContent = 'Match found';
-        st.textContent = 'Starting the match\u2026';
+        $('queue-title').textContent = RV.online.ffa ? 'Joined' : 'Match found';
+        st.textContent = RV.online.ffa ? 'Loading the map\u2026' : 'Starting the match\u2026';
         $('btn-queue-cancel').textContent = 'Leave';
       },
       onReady: (opp) => {
@@ -635,7 +661,7 @@
         $('btn-queue-net').classList.remove('hidden');
         st.className = 'queue-status err';
         st.textContent = msg;
-        $('queue-title').textContent = title === 'Rematch' ? 'No rematch' : 'Could not queue';
+        $('queue-title').textContent = title === 'Rematch' ? 'No rematch' : RV.online.ffa ? 'Could not join' : 'Could not queue';
         $('btn-queue-cancel').textContent = 'Back';
       },
       // the other player's answer to a rematch request ('left' / 'closed': no rematch will happen)
@@ -779,7 +805,7 @@
   // ---------------------------------------------------------------- results
   UI.showResults = function (r) {
     $('res-title').textContent = r.title;
-    $('btn-retry').textContent = r.online ? 'Find new match' : 'Play again';
+    $('btn-retry').textContent = r.ffa ? 'Rejoin free-for-all' : r.online ? 'Find new match' : 'Play again';
     let html = '<div class="res-big ' + (r.bigClass || '') + '">' + r.big + '</div><div class="res-sub">' + r.sub + '</div>';
     html += '<table class="res-table">';
     for (const [k, v] of r.rows) html += '<tr><td>' + k + '</td><td>' + v + '</td></tr>';
@@ -824,7 +850,7 @@
       UI.show('name');
     });
     $('btn-queue-cancel').addEventListener('click', () => UI.cancelQueue());
-    $('btn-queue-retry').addEventListener('click', () => UI.startQueue());
+    $('btn-queue-retry').addEventListener('click', () => (RV.online.ffa && UI.ffaMap ? UI.startFfa(UI.ffaMap) : UI.startQueue()));
     $('btn-queue-net').addEventListener('click', () => {
       UI.tab = 'network';
       UI.settingsOpenFromPause = false;
@@ -878,15 +904,9 @@
     $('btn-start').addEventListener('click', () => UI.quickStart(UI.selMode, UI.selMap));
 
     // pause menu
-    $('btn-resume').addEventListener('click', () => {
-      RV.input.requestLock();
-      if (RV.input.noLock) RV.game.resume();
-    });
+    $('btn-resume').addEventListener('click', () => RV.game.resumeRequest());
     $('scr-pause').addEventListener('mousedown', (e) => {
-      if (e.target === $('scr-pause')) {
-        RV.input.requestLock();
-        if (RV.input.noLock) RV.game.resume();
-      }
+      if (e.target === $('scr-pause')) RV.game.resumeRequest();
     });
     $('btn-restart').addEventListener('click', () => {
       RV.game.restart();
@@ -909,9 +929,11 @@
     // results
     $('btn-retry').addEventListener('click', () => {
       if (RV.game.modeImpl && RV.game.modeImpl.realtime) {
-        // online: back to the queue for a new opponent
+        // online: back to the queue for a new opponent (free-for-all: back into the room)
+        const ffaMap = RV.online.ffa ? RV.online.mapId : null;
         RV.game.stop();
-        UI.requireName(() => UI.startQueue());
+        if (ffaMap) UI.startFfa(ffaMap);
+        else UI.requireName(() => UI.startQueue());
         return;
       }
       UI.hideAll();

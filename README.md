@@ -28,7 +28,8 @@ python -m http.server 8000      # then open http://localhost:8000
 # or:  npx serve .
 ```
 
-Pick a mode, pick a map, press **Start**. The mouse locks to the game (Pointer Lock). **Esc** releases it and pauses.
+Pick a mode, pick a map, press **Start**. The mouse locks to the game (Pointer Lock). **Esc** releases it and pauses. In an online match the match keeps running behind the menu; **Esc** again (or *Resume*) closes it - Chrome refuses
+a mouse capture right after Esc, so *Resume* asks again for a moment instead of doing nothing.
 
 **Every Duel / Online round starts with a 3 second countdown with both fighters locked in their own spawn.** After that,
 **winning or losing a Duel or Deathmatch never pauses the game or frees your mouse, and you are never frozen:** after
@@ -37,8 +38,8 @@ next round / match starts by itself. (Prefer the old results screen? *Settings �
 
 ### Chromebook / browser-safety notes
 * **You always run (there is no sprint key); `Shift` slides, and so does `C`.** `Ctrl+W` closes a tab and `Ctrl+1…8` switches
-  browser tabs (Chrome reserves those; no web page can block them), so the game needs no Ctrl: the **mouse wheel** and **`F`**
-  (previous weapon) switch weapons without it, and *Settings → Graphics → Fullscreen* additionally asks Chrome to deliver those combos to the game.
+  browser tabs (Chrome reserves those; no web page can block them), so the game needs no Ctrl: the **mouse wheel**, **`F`** (quick melee)
+  and **`G`** (quick grenade) act without it, and *Settings → Graphics → Fullscreen* additionally asks Chrome to deliver those combos to the game.
 * Gameplay keys never scroll the page, and **nothing is intercepted outside a running game**. Leaving or closing the
   tab mid-match shows a "Leave site?" confirmation.
 * Losing focus (Alt-Tab, another tab, DevTools) pauses the game, releases the mouse, clears every held key and mutes
@@ -55,6 +56,7 @@ next round / match starts by itself. (Prefer the old results screen? *Settings �
 | Mode | What you do |
 |------|-------------|
 | **Online 1v1** | **A real match against another player.** Press *Online 1v1*, wait in the queue, and you are paired with whoever else is searching. First to **5 rounds**, 150 health each, every round starts with a **3 second countdown** during which both players are locked in their own spawn. See *Online 1v1* below. |
+| **Free-for-all (online)** | **An open server that is always running.** Pick a map and you are in: anyone can join or leave at any time, up to **12 players** per room, everybody against everybody, no rounds. A death puts you back on a spawn after 2.5 s (with 2.5 s of spawn protection); the first to **25 eliminations** wins the round of the room and the scores start over. Needs the game server, like Online 1v1. See *Free-for-all* below. |
 | **Duel** | 1v1 against an AI. Each round ends on an elimination, then everything resets automatically (sides alternate). First to **3 / 5 / 7** round wins. 75 s round limit: most health wins. Maps: Arena, Bridge, Crossroads, Docks, Station, Backrooms. |
 | **Deathmatch** | Free-for-all against 1–7 AI opponents (easy / normal / hard). First to **10 / 15 / 25** eliminations within 5 minutes. ~1 s respawns, regenerating health. |
 | **Time Trial** | Race through glowing checkpoint rings on the **Gauntlet**. Splits compare with your best; falling respawns you at the last checkpoint (`Q`). |
@@ -128,12 +130,29 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
   server-side checks stop teleports, speed hacks, wall clipping, fire-rate hacks and wallhacks, but an aimbot that stays
   inside the rules cannot be detected by any server (the docs say what is logged for a human to review).
 
+## Free-for-all (the always-running open server)
+* **How to join:** lobby → *Play* → **Free-for-all** (or the classic menu's *Free-for-all* card) → pick a map (each card shows how many players are in that
+  room right now) → *Start*. There is no queue and no waiting for an opponent: you are in the room as soon as the map has loaded. The server keeps **one room per map
+  running for as long as it runs** (`FFA_MAPS`, `FFA_MAX_PLAYERS` = 12); a full room says so and you pick another map. Leaving is the pause menu's *Leave the free-for-all*,
+  closing the tab, or losing the connection (the game then **joins the room again by itself** as a fresh life).
+* **Rules:** everyone fights everyone with the normal four weapons. You spawn on the spawn point farthest from the others, with **2.5 s of spawn protection** that ends when you attack. When you die
+  the screen shows who got you and a respawn countdown; the server puts you back after **2.5 s** on a new spawn with full health and ammo. Falling out of the map is a death too (credited to whoever hurt you in the last 6 s).
+  The first to **25 eliminations** wins the round of the room (everybody is told, scores reset, nobody is removed). A player who does nothing for **2 minutes** is moved out (an open server must not fill up with sleepers).
+  Hold **Tab** for the scoreboard of the whole room (elims, deaths, ping); the kill feed shows every elimination in the room.
+* **Same authority as 1v1:** your browser predicts its own movement and sends input; the server steps everybody's movement with the same physics, decides every hit (lag-compensated, the nearest player along the shot is the one hit),
+  owns health, ammo, grenades, deaths and the score, and only tells you about players it says you can see (line of sight, with margin). Every life has its own number, so input from a life that has just ended is ignored.
+  Server code: `server/ffa.js` (it reuses the 1v1 room's movement, lag-compensation and visibility code); client: the FFA section of `js/online.js`; tests: `server/test/ffa.test.js`.
+* **Cost:** a full 12-player room costs the server about 0.3-2 ms per 30 Hz tick (5 % of one core on the biggest map) and about 9 KB/s per player.
+
 ## 3D models, maps and the lobby (made in Blender)
 The four weapons are modelled in Blender in the **Roblox RIVALS look** (chunky, flat-shaded, saturated; the shapes follow RIVALS' own
-default models, the real-world bases are the ones the RIVALS wiki names): the **Assault Rifle** is an *orange* FN SCAR-L with
-black vent slots, a black rail, flip-up ring sights, a black curved magazine and a block flash hider; the **Handgun** is an all-black
+default models, the real-world bases are the ones the RIVALS wiki names): the **Assault Rifle** is the RIVALS rifle itself, imported from a Roblox Studio OBJ export
+(`_models/assault-rifle/AssualtRifle.obj`, converted by `tools/blender/build_rifle.py`; the first procedural version is in
+`_archive/build_rifle_procedural.py`): an orange SCAR-style rifle with a navy frame, vent slots, a ribbed black magazine and two flip-up
+**ring sights**. **Its sight is one circle**: you aim through the octagonal rear ring and see the front ring and its spike standing inside it; the
+magazine and a small dial on the receiver are animated parts (the dial pumps back on every shot); the **Handgun** is an all-black
 USP-style slab with a square bore, three vents and two pins on the slide; the **Grenade** is a faceted dark-green M67 with a gold
-collar and a navy fuze and lever; the **Fists** are two blocky Roblox arms (black sleeves, block hands). They are exported as
+collar and a navy fuze and lever; the **Fists** are two thick, short block arms (black sleeve, skin-coloured hand end). They are exported as
 data (`js/models-weapons.js`). Animated pieces (magazine, slide, charging handle, trigger, grenade lever and pin) are separate
 parts with pivots, so every animation works on them. Opponents hold simpler low-poly versions of the weapons (drawn small and
 far away).
@@ -163,7 +182,7 @@ another box) are not exported. Window and door openings are real holes (you can 
 * **Add a map:** copy a `build_*.py`, change the layout, run it, then add one `fromData('<id>', ...)` entry (name, palette, sky,
   kill height, nav step) in `js/maps.js`, a `<script src="js/mapdata-<id>.js">` tag in `index.html` and the id to `MAPS` in
   `server/config.js`. A map whose data file is missing is simply not offered.
-* **Weapons:** `build_rifle.py` ... `build_hands.py`, then `export_models.py` (-> `js/models-weapons.js`). The Arena is a normal map script, `build_testarena.py` (its id is `testarena`: `arena` is already the name of a game mode).
+* **Weapons:** `build_rifle.py` (reads the OBJ) ... `build_grenade.py`, then `export_models.py` (-> `js/models-weapons.js`). The Arena is a normal map script, `build_testarena.py` (its id is `testarena`: `arena` is already the name of a game mode).
 * Maps can have **water** (`water: {y, color}` in the map entry; Docks) and can be **indoor** (`sky.indoor`: no sun, hills or clouds;
   Backrooms). Runnable walls (`wall` flag in the data) are supported but unused by the pool.
 
@@ -194,7 +213,7 @@ the **front sight ends exactly on the crosshair**. How it works (`js/vmanim.js`,
   never turns and the gun slides). Limits: aiming turns the view by a few degrees (so the movement direction follows it, like any mouse turn), and there
   is no scoped weapon in the game, so the scope overlay is not used (`sight: 'iron'` weapons only).
 
-## Weapons — exactly four (keys 1–4, mouse wheel, `F` = previous weapon)
+## Weapons — exactly four (keys 1–4, mouse wheel, `F` quick melee, `G` quick grenade)
 
 The numbers follow **Roblox RIVALS** (community wiki / weapon database, checked October 2026; RIVALS is patched often, so
 treat them as "as of then"). Everything is in one table, `js/weapondata.js`, shared with the server.
@@ -204,7 +223,7 @@ treat them as "as of then"). Everything is in one table, `js/weapondata.js`, sha
 | 1 | **Assault Rifle** (SCAR-style model) | full-auto hitscan | 12 up close, falling to 3 at range (headshot 15 → 4) | 0.10 s between shots | 20 in the magazine / 100 spare, reload 1.56 s |
 | 2 | **Handgun** | semi-auto hitscan | 12 → 3 (headshot 15 → 4) | 0.13 s between shots | 13 / 91 spare, reload 1.06 s |
 | 3 | **Fists** | melee, 2.4 m reach. **Unlocks the double jump** | 30 | 0.35 s | ∞ |
-| 4 | **Grenade** | hold to aim, release to throw, or let the circle reach you to boost | 75 blast | 30 s cooldown, 2 s fuse | 1 |
+| 4 | **Grenade** | hold to aim, release to throw, or let the circle reach you to boost | 75 blast | 30 s cooldown, 1.2 s fuse | 1 |
 
 Notes on the conversion: RIVALS measures distance in studs; here one stud is 0.36 m (RIVALS' avatar is ~5.2 studs tall, this
 one is 1.85 m), so the rifle's 50 → 200 stud falloff is **18 → 71 m** and the grenade's 16 stud blast is ~6 m. **Health is
@@ -225,36 +244,47 @@ is now 0 by default). The 2 s respawn protection stays in **Deathmatch** (`RV.SP
   against their *current* hitboxes in that same moment. Animations, hands and sounds are cosmetic and never change a hit.
 * **Headshots:** a hit on the head deals ×1.25 damage (RIVALS' crit: 12 → 15). **Damage numbers** pop up beside the crosshair: **white for a body
   shot, red for a headshot** (kills are drawn a little larger).
-* Tracers, sparks, muzzle flash and shell casings are created *after* the hit is resolved. Right mouse aims down sights
+* Tracers, sparks, muzzle flash and shell casings are created *after* the hit is resolved. The tracer starts at the muzzle you see: the game
+  projects the model's real muzzle point (through its pose, the aiming move and the field of view) onto the screen and starts the tracer there
+  (`VM.tracerOffset`), so it follows the barrel of whatever model is in hand. Right mouse aims down sights
   (hold, or toggle in settings): the gun turns in so its front sight is on the crosshair (see *First-person weapon position*). Only the picture
   changes: the shot leaves through the crosshair either way.
 
 ### Fists and the double jump
 Left click punches (alternating hands, a short cooldown, one hit per punch; the hitbox is a slightly enlarged body box,
-blocked by walls). **Only while the Fists are equipped:** press `Space` once more in the air for a second jump with an
-upward boost. It refreshes when you touch the ground, keeps your momentum and air strafing (the held direction nudges
-your course), shows a small ring effect and a hand flick, and never replaces a bunny hop or a wall jump. Switching away
+blocked by walls). Each fist is **one thick rectangular block**: a black sleeve and the hand on its end. A punch draws the fist
+back, snaps it straight ahead to the crosshair with a quarter turn of the wrist, holds a beat and brings it back, while the other fist stays up
+as a guard. **Only while the Fists are equipped:** press `Space` once more in the air for a second jump that rises **exactly as high as a
+normal jump** (1.6 m). It refreshes when you touch the ground, keeps your momentum and air strafing (the held direction nudges
+your course), shows a small ring effect (the fists themselves do not move for it), and never replaces a bunny hop or a wall jump. Switching away
 turns it off at once; switching back mid-air never grants a second one if you already used it.
+**Quick melee (`F`):** instead of switching by hand, press `F`: the fists come out, throw **one punch** as soon as they are up, and the weapon you had comes back (about 0.65 s in all; the
+"previous weapon" slot is left as it was). The fists are in your hands for that whole time, so **a jump pressed in that time frame is a double jump** - jump, tap `F`, jump again. With the fists already
+out, `F` is just one punch. Choosing a weapon yourself during it ends it. **Quick grenade (`G`):** the grenade comes out, is thrown at once (no holding, no aiming circle) and the weapon comes back; with no
+grenade left it only tells you when the next is ready. Both work online (the server sees the weapon changes in your input and decides the punch and the grenade like any other; no extra rule), and both keys can be
+rebound in *Settings → Keybinds* (the old *Previous weapon* key moved to `V`).
 
 ### Grenade
 * **Hold a mouse button** (left or right) to pull the pin and aim: a dotted line shows the path and a **circle shows
   where it lands** (a faint ring shows the 6 m blast). **Release to throw** along your view. **R** (or switching weapon)
   cancels and you keep the grenade.
-* **Keep holding and the circle comes for you.** It sits where it would land for the first second, then slides towards
+* **Keep holding and the circle comes for you.** It sits where it would land for the first 0.6 s, then slides towards
   you — slowly at first, then faster, turning from teal to red with a faster and higher warning beep — and exactly
-  3 s after the pin came out it touches you and explodes. A thin bar under the crosshair shows the 3 s (tick at 1 s).
-  That is a free **grenade boost**: you are launched away from the blast (a grenade at your feet = straight up).
-* It is the only projectile: a thrown one flies with gravity, bounces off walls and floors, and explodes 2 s after
+  1.8 s after the pin came out it touches you and explodes. A thin bar under the crosshair shows the 1.8 s (tick at 0.6 s).
+  That is a free **grenade boost**: you are launched away from the blast (a grenade at your feet = straight up, about 8 m: the boost is
+  strong, 21 m/s at the centre, within 7 m of the blast).
+* It is the only projectile: a thrown one flies with gravity, bounces off walls and floors, and explodes 1.2 s after
   leaving your hand (restrained flash, ring, particles and a loud synthesised boom).
 * **75 damage** to every enemy it can see inside the blast (including one standing next to you when it goes off on you);
   cover and walls block or reduce it. **It never damages you.**
 * **One grenade, 30 s cooldown** (8 s in Practice so you can learn boosts). The cooldown shows on the HUD and on slot 4.
 
 ## First-person hands and weapon animation
-All four weapons are held by the same pair of blocky, Roblox-style hands (a small block hand, a short bare forearm and a
-dark sleeve, sized so they never cover the crosshair). They follow every animation: idle, run, slide, jump,
+All four weapons are held by the same pair of **block fists**: one thick rectangular block each, a black sleeve (most of it) and a
+skin-coloured hand on its end (`buildFist` in `js/viewmodel.js`; on the guns and the grenade they are drawn at 70-80 % so they never cover the
+sight picture). They follow every animation: idle, run, slide, jump,
 landing dip, firing (trigger / bolt / slide — no recoil), reloads (the supporting hand pulls the magazine), weapon
-switching, the grenade pin pull and throw, punches and the double-jump flick. The weapon is drawn in its own pass, so it
+switching, the grenade pin pull and throw and punches (the double jump has no hand animation). The weapon is drawn in its own pass, so it
 never clips into walls.
 
 ## Sound
@@ -275,7 +305,9 @@ double jump, landing and UI all have their own sounds.
 | Aim down sights (with the grenade out: also holds it) | **Right mouse** |
 | Cancel a held grenade | **R** |
 | Reload | **R** |
-| Weapons | **1–4**, mouse wheel, **F** previous |
+| Weapons | **1–4**, mouse wheel, **V** previous weapon |
+| Quick melee | **F**: the fists come out, **one punch**, your weapon comes back. A jump pressed while the fists are out is a **double jump** |
+| Quick grenade | **G**: take a grenade out, throw it at once (no holding), your weapon comes back; with none left it says when the next is ready |
 | Quick restart | **T** |
 | Back to checkpoint / spawn | **Q** (time trial, practice) |
 | Practice: set spawn | **E** |
@@ -285,12 +317,20 @@ double jump, landing and UI all have their own sounds.
 ## Movement guide
 * **Slide** – hold slide while running: instant (capped) speed boost, keeps momentum, gains speed downhill, fits under low gaps.
 * **Slide jump** – press jump mid-slide to keep the speed and add a little.
+* **Speed and floor** – you run at **8.5 m/s** in every direction; the floor is grippy: letting go of the keys stops you in about 0.15 s (half a metre), and a
+  slide runs out in about 1.5 s. A jump rises 1.6 m.
 * **Bunny hop** – landing with a jump queued (or auto-hop held) skips ground friction, so speed is never lost.
 * **Air strafe** – in the air hold **A** or **D** and turn the mouse the same way: speed climbs with every well-timed hop.
 * **Wall run** – jump alongside a **teal striped wall** while holding forward: you hold height and speed for a few seconds.
 * **Wall jump** – press jump on any wall (or mid wall run) to push off towards where you're looking, keeping your speed.
 * **Double jump** – fists only (see above). **Grenade boost** – see above.
 * **Ramps & pads** – run up a ramp and jump off its end to carry the climb speed; launch pads throw you far.
+* **The maps are fenced.** Every duel map has an invisible fence on the inner faces of its outer walls and a ceiling above them (`play` in
+  `js/maps.js`, enforced by `World.move` for the browser, the bots and the server alike): nothing can leave it, however fast it is launched, so a
+  grenade boost or a bunny hop over a wall top can never put you outside the map and into the void. The Arena also draws it: a faint
+  **force field** (`barrier`) stands above the wall tops up to the ceiling. Collision never throws a body to the far end of a solid any more (that
+  was the "I glitch and teleport out" bug: a body brushing the side of a catwalk or a wall while falling was lifted onto its top or pushed 20 m along
+  it; `World._unstick` now finds the nearest way out). (`server/test/map.test.js` fuzzes every map with extreme launches.)
 * No fixed top speed. The physics step is a fixed 120 Hz with render interpolation, so movement is identical at 30, 60 or 144 FPS.
 
 ## Interface, the 3D lobby and the classic menu
@@ -396,7 +436,7 @@ js/mapdata-<id>.js   collision + spawns of a map made in Blender (bridge, crossr
 js/mesh-<id>.js      the picture of a map / the lobby (testarena, lobby, bridge, ...), exported from Blender; maps' pictures load on demand
 js/lobby.js          the 3D lobby: scene, camera stops, avatar, rack, matchmaking board, zone cards, real server status
 css/lobby.css        the lobby's interface layer
-js/models-weapons.js the four weapons' first-person models (rifle, handgun, grenade, hands), exported from Blender by tools/blender/export_models.py
+js/models-weapons.js the weapons' first-person models (rifle, handgun, grenade; the hands are built in viewmodel.js), exported from Blender by tools/blender/export_models.py
 tools/blender/       the Blender scripts that build and export models, maps and the lobby (run inside Blender); the .blend is _models/dashduel-models.blend
 _models/exports/     glTF (.glb) copies of the lobby, maps and the shared kit
 js/collision.js      collision world (AABB + ramp wedges, spatial grid, raycasts)
@@ -427,7 +467,7 @@ _archive/            retired code (the old peer-to-peer transport, the Tactical 
 
 ## Testing
 ```bash
-cd server && npm test            # 90 server tests (serial, ~6 min): movement prediction == simulation, combat, anti-cheat rules,
+cd server && npm test            # 123 server tests (serial, ~6 min): movement prediction == simulation, combat, anti-cheat rules,
                                  # sessions / reconnect / rematch, information protection, lobby, WebSocket layer, load
 ```
 The browser side was verified with headless Chrome against the real server: two real browsers queueing, playing a full

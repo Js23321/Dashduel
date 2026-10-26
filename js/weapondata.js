@@ -15,7 +15,7 @@
    *   Assault Rifle: 12 damage falling to 3, crit 15 -> 4 (x1.25), 0.10 s between shots, 20 / 100 rounds, reload 1.56 s
    *   Handgun:       12 damage falling to 3, crit 15 -> 4 (x1.25), 0.13 s between shots, 13 / 91 rounds, reload 1.06 s
    *   Fists:         30 damage, 0.35 s
-   *   Grenade:       75 blast damage, 16 stud radius, 2 s fuse, 30 s cooldown
+   *   Grenade:       75 blast damage, 16 stud radius, 1.2 s fuse, 30 s cooldown
    * (RIVALS' per-weapon move speed changes are NOT copied: weapons never slow movement here, by design.)
    */
   /** Slot order = number keys 1..4. */
@@ -41,11 +41,11 @@
       // Hold the button to aim (a path line + landing circle), release to throw. If you keep holding,
       // after `hold.still` s the circle starts sliding towards you (slowly, then faster) and reaches you
       // `hold.total` s after the pin came out: it touches you and explodes (a self boost, no damage to you).
-      hold: { still: 1.0, total: 3.0 },
+      hold: { still: 0.6, total: 1.8 },
       // fuse = seconds after release; speed in m/s along the view direction; arc = extra upward angle (rad)
-      fuse: 2.0, speed: 17, arc: 0.17, radius: 6, minDmgFrac: 1, selfMul: 0, maxCount: 1, regen: 30, regenPractice: 8,
+      fuse: 1.2, speed: 17, arc: 0.17, radius: 6, minDmgFrac: 1, selfMul: 0, maxCount: 1, regen: 30, regenPractice: 8,
       // self boost: a blast within boostRadius shoves you away from it (no damage to you)
-      boostRadius: 6.5, boostPower: 15, boostUp: 0.45,
+      boostRadius: 7, boostPower: 21, boostUp: 0.5,
       desc: 'Hold to aim, release to throw. Keep holding and the circle slides to you and blows: 75 to enemies, never hurts you, launches you. 30 s cooldown.', stats: { damage: 75, rate: '30 s cooldown', mag: '1', range: '6 m blast' },
     },
   ];

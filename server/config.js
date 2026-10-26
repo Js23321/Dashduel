@@ -56,7 +56,7 @@ module.exports = {
   ADMIN_TOKEN: env.ADMIN_TOKEN || '',
   TEST_MODE: env.TEST_MODE === '1', // TESTS ONLY: enables the test-only teleport message. Never set in production.
 
-  PROTOCOL: 3, // bump when the client/server messages change incompatibly (3: one run speed, no sprint)
+  PROTOCOL: 4, // bump when the client/server messages change incompatibly (3: one run speed, no sprint; 4: the free-for-all room)
   TICK_HZ: 30, // snapshots and room housekeeping per second (movement is stepped at 120 Hz, see js/player.js)
   MAX_MESSAGE: 4096, // bytes per client message
   MAPS: ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms'], // online 1v1 maps (Arena, Bridge, Crossroads, Docks, Station, Backrooms; ids that have no data file are skipped)
@@ -71,6 +71,20 @@ module.exports = {
   REMATCH_WINDOW_S: num(env.REMATCH_WINDOW_S, 20), // after a match both players may agree to a rematch for this long
   SESSION_IDLE_S: num(env.SESSION_IDLE_S, 60), // a session without a connection and without a match is forgotten after this
   MAX_SESSIONS: num(env.MAX_SESSIONS, 4000),
+
+  // ---- the free-for-all server: one always-running room per map, anyone joins or leaves at any time ----------------------
+  FFA: {
+    ENABLED: env.FFA !== '0',
+    MAPS: list(env.FFA_MAPS), // maps that get an FFA room (default: every map of MAPS)
+    MAX_PLAYERS: num(env.FFA_MAX_PLAYERS, 12), // per room: a full room says so and the player picks another map
+    RESPAWN_S: num(env.FFA_RESPAWN_S, 2.5), // seconds dead before the server puts the player back on a spawn
+    SPAWN_PROTECT_S: num(env.FFA_SPAWN_PROTECT_S, 2.5), // after every spawn: no damage for this long, or until the player attacks
+    KILL_LIMIT: num(env.FFA_KILL_LIMIT, 25), // first to this many eliminations wins the round of the room: scores reset, nobody is thrown out
+    LOAD_TIMEOUT_S: 40, // a joined player who never finishes loading the map is dropped after this
+    IDLE_S: num(env.FFA_IDLE_S, 120), // no movement, aim or action for this long: moved out of the room (an AFK player must not sit there forever)
+    HEAR_M: 90, // shots, punches and blasts are only sent to players closer than this
+    CREDIT_S: 6, // a fall into the void within this many seconds of being hurt counts for whoever hurt the player last
+  },
 
   // ---- server-side movement simulation (the server steps js/player.js with the client's inputs) -------------
   MOVE: {

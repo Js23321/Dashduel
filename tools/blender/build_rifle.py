@@ -1,80 +1,159 @@
 """
-ASSAULT RIFLE in the Roblox RIVALS look: the RIVALS Assault Rifle is a chunky, flat-shaded FN SCAR-L in ORANGE with BLACK parts
-(reference: the wiki's default model): orange handguard with black vent slots, orange receiver with a long black side panel,
-orange angular pistol grip and stock, a black curved ribbed magazine, a thin black barrel with a block flash hider, black flip-up
-ring sights front and rear, a black rail along the top.
-Run inside Blender after lib.py.  Game coordinates: muzzle at -z, +y up, sight line y = 0.1.
-Anchors the game relies on:  rear aperture centre (0, 0.1, 0.11)   front post tip (0, 0.1, -0.41)   muzzle (0, 0.022, -0.66)
-Parts: body, mag (pivot 0,-0.07,-0.05), bolt (pivot 0.037,0.047,0.085), trigger (pivot 0,-0.045,0.085)
-Materials (game names): orange, orangeDark, black, dark, gun, steel
+ASSAULT RIFLE: the RIVALS assault rifle, imported from the OBJ the player supplied (_models/assault-rifle/AssualtRifle.obj, a Roblox Studio
+export: 10 mesh parts, 5 flat colours). It is an orange SCAR-style rifle with a dark navy frame, two flip-up RING sights (the rear one is the
+one circle you look through; the front ring and its spike stand inside it) and a ribbed black magazine.
+(The first procedural version of this rifle is kept in _archive/build_rifle_procedural.py.)
+
+What this script does: reads the OBJ itself (no importer: the transform is exact and the mesh stays one-sided), turns it into game coordinates
+(x right, y up, z BACKWARDS: the muzzle is at -z) and fits it to the old rifle's size (1.13 long, muzzle at z = -0.66, barrel axis y = 0.022),
+gives every Roblox colour a game material, and splits the magazine off as the animated part `mag` and the long dark strip on TOP of the
+receiver (between the two sights) as `bolt`: it slides back on every shot and when the magazine is changed (the only fire animation: the gun
+itself never recoils). The strip is two pieces of the file's dark mesh part (Meshpart1 is one mesh part of 22 separate solids), found by shape.
+Run inside Blender after lib.py (exec of lib.py happens below).
+Anchors the game reads from this model (see SPEC.rifle in js/vmanim.js):
+    rear ring centre   (0, 0.1265, 0.153)      front ring centre (0, 0.1265, -0.360)      muzzle (0, 0.022, -0.66)
+    (both rings are octagons: top y_obj -83.354, widest -83.441, bottom -83.529, so the centre is -83.4415 -> 0.022 + S * 0.356 = 0.1265)
+Parts: body, mag (pivot 0, -0.0078, -0.0434), bolt (pivot 0, 0.080, -0.0934)
+Materials (game names): rvDark (navy frame, rings, barrel), rvOrange (the shell), rvOrangeDark (lower receiver + grip), rvGrey (trim), rvBlack (magazine)
 """
+import os
+
 exec(open(r'C:\Users\ryder\Downloads\Rivel\tools\blender\lib.py').read())
+
+OBJ = r'C:\Users\ryder\Downloads\Rivel\_models\assault-rifle\AssualtRifle.obj'
+
+# OBJ (Roblox studs, long axis x, muzzle at the smallest x) -> game metres
+LENGTH = 3.851  # stud length of the whole rifle in the OBJ
+S = 1.13 / LENGTH
+X0 = 172.569  # the muzzle end
+ZC = -480.058  # the middle of the rifle's width: the centre line of BOTH rings (z -480.146 .. -479.970), so the sights are dead centre (x = 0)
+YB = -83.7975  # the barrel axis height
+
+
+def to_game(x, y, z):
+    return (-S * (z - ZC), 0.022 + S * (y - YB), -0.66 + S * (x - X0))
+
+
+MATERIAL = {'Meshpart1Mtl': 'rvDark', 'Meshpart4Mtl': 'rvOrange', 'Meshpart2Mtl': 'rvOrangeDark', 'Meshpart3Mtl': 'rvGrey', 'Meshpart8Mtl': 'rvBlack'}
+MAG_GROUPS = ('Meshpart8', 'Meshpart9')  # the magazine and its base plate
+MAG_PIVOT = (0.0, -0.0078, -0.0434)  # the top of the magazine
+BOLT_PIVOT = (0.0, 0.080, -0.0934)  # the middle of the top strip (it only slides along z)
+
+
+def is_top_strip(c_min, c_max):
+    """The top strip: a long thin solid on top of the receiver, between the front and the rear ring (OBJ studs)."""
+    return c_min[0] >= 173.6 and c_max[0] <= 175.32 and c_min[1] > -83.69 and c_max[1] - c_min[1] < 0.12 and c_max[0] - c_min[0] > 1.0
+# viewport colours (the game decides the real ones by name)
+COLOURS.update({'rvDark': (0.0046, 0.0084, 0.0278), 'rvOrange': (0.767, 0.334, 0.048), 'rvOrangeDark': (0.673, 0.173, 0.043), 'rvGrey': (0.094, 0.096, 0.094), 'rvBlack': (0.0026, 0.0026, 0.0026)})
+
+
+def read_obj(path):
+    V, VN, groups, cur, mat = [], [], {}, None, None
+    for line in open(path, encoding='utf-8'):
+        t = line.split()
+        if not t:
+            continue
+        if t[0] == 'v':
+            V.append(tuple(float(a) for a in t[1:4]))
+        elif t[0] == 'vn':
+            VN.append(tuple(float(a) for a in t[1:4]))
+        elif t[0] == 'g':
+            cur = t[1]
+            groups[cur] = {'mat': None, 'faces': []}
+        elif t[0] == 'usemtl':
+            mat = t[1]
+            groups[cur]['mat'] = mat
+        elif t[0] == 'f':
+            groups[cur]['faces'].append([(int(p.split('/')[0]) - 1, int(p.split('/')[2]) - 1 if p.count('/') >= 2 else -1) for p in t[1:]])
+    return V, VN, groups
+
+
+def solids_of(V, faces):
+    """The connected solids of a face list (vertices that sit at the same place are the same vertex)."""
+    key = lambda i: (round(V[i][0], 3), round(V[i][1], 3), round(V[i][2], 3))
+    parent = {}
+
+    def find(a):
+        while parent.setdefault(a, a) != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for f in faces:
+        ks = [key(i) for i, _ in f]
+        for k in ks[1:]:
+            ra, rb = find(ks[0]), find(k)
+            if ra != rb:
+                parent[ra] = rb
+    out = {}
+    for f in faces:
+        out.setdefault(find(key(f[0][0])), []).append(f)
+    return list(out.values())
+
+
+def group_object(col, name, V, VN, g, part):
+    bm = bmesh.new()
+    verts = {}
+
+    def vert(i):
+        if i not in verts:
+            verts[i] = bm.verts.new(gb(*to_game(*V[i])))
+        return verts[i]
+
+    # the file's own normals say which way the faces look: flip the whole group if the winding disagrees with them
+    agree = 0
+    for f in g['faces']:
+        if len(f) < 3 or f[0][1] < 0:
+            continue
+        a, b, c = [Vector(to_game(*V[i])) for i, _ in f[:3]]
+        gn = (b - a).cross(c - a)
+        n = VN[f[0][1]]
+        # (the rotation to game axes is proper, so the normal's game version is just the rotated vector)
+        ng = Vector((-n[2], n[1], n[0]))
+        agree += 1 if gn.dot(ng) > 0 else -1
+    flip = agree < 0
+    for f in g['faces']:
+        idx = [i for i, _ in f]
+        if flip:
+            idx.reverse()
+        for k in range(1, len(idx) - 1):  # fan-triangulate quads
+            try:
+                bm.faces.new((vert(idx[0]), vert(idx[k]), vert(idx[k + 1])))
+            except ValueError:
+                pass  # a duplicate face
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    col.objects.link(ob)
+    ob.data.materials.append(get_mat(MATERIAL[g['mat']]))
+    ob['part'] = part
+    for p in me.polygons:
+        p.use_smooth = False
+    return ob, flip
+
 
 sc = make_scene('DASHDUEL_Weapons')
 col = make_collection(sc, 'WEAPON_rifle')
-B = 0.003  # the facet chamfer that gives the toy-block look
+V, VN, groups = read_obj(OBJ)
+flips = {}
+n_strip = 0
+for name, g in groups.items():
+    if name == 'Meshpart1':
+        # the dark mesh part is 22 separate solids: sights, barrel, bands... and the top strip, which is the one that moves
+        for k, faces in enumerate(solids_of(V, g['faces'])):
+            ids = [i for f in faces for i, _ in f]
+            lo = [min(V[i][a] for i in ids) for a in range(3)]
+            hi = [max(V[i][a] for i in ids) for a in range(3)]
+            strip = is_top_strip(lo, hi)
+            n_strip += 1 if strip else 0
+            ob, flip = group_object(col, '%s_%d' % (name, k), V, VN, {'mat': g['mat'], 'faces': faces}, 'bolt' if strip else 'body')
+            flips['%s_%d' % (name, k)] = flip
+        continue
+    ob, flip = group_object(col, name, V, VN, g, 'mag' if name in MAG_GROUPS else 'body')
+    flips[name] = flip
+assert n_strip == 2, 'expected the top strip to be 2 solids, found %d' % n_strip
+pivot(col, 'mag', *MAG_PIVOT)
+pivot(col, 'bolt', *BOLT_PIVOT)
 
-# ---- receiver (orange) with the long black side panel -----------------------------------------------------------------------------
-prof(col, 'receiver', [(-0.14, -0.012), (-0.14, 0.07), (0.27, 0.07), (0.31, 0.046), (0.31, -0.012)], 0.082, 0, 'orange', bevel=B)
-box(col, 'side_panel', 0.0845, 0.024, 0.13, 0, 0.034, 0.075, 'black')                      # the black recess behind the ejection port
-box(col, 'side_panel_front', 0.0845, 0.016, 0.05, 0, 0.034, -0.015, 'black')
-box(col, 'selector', 0.0865, 0.018, 0.018, 0, 0.012, 0.165, 'black', rot=(0, 0, 0.785))   # the diamond button
-box(col, 'rear_band', 0.0835, 0.074, 0.012, 0, 0.026, 0.285, 'black')
-
-# ---- handguard (orange) with three black vent slots, and the black rail on top ------------------------------------------------------
-box(col, 'handguard', 0.078, 0.088, 0.34, 0, 0.026, -0.31, 'orange', bevel=B)                # z -0.48 .. -0.14, y -0.018 .. 0.07
-for i in range(3):
-    box(col, 'slot%d' % i, 0.0805, 0.024, 0.07, 0, 0.034, -0.4 + i * 0.1, 'black')
-box(col, 'guard_step', 0.0805, 0.03, 0.02, 0, -0.005, -0.485, 'orangeDark')
-box(col, 'top_rail', 0.036, 0.014, 0.8, 0, 0.077, -0.09, 'black', bevel=0.0015)             # top at y = 0.084, z -0.49 .. 0.31
-
-# ---- barrel, gas block, block flash hider (black) ----------------------------------------------------------------------------------
-cyl(col, 'barrel', 0.0125, 0.0125, 0.13, 0, 0.022, -0.545, 'black', seg=8)
-box(col, 'gas_block', 0.034, 0.034, 0.04, 0, 0.032, -0.495, 'black', bevel=0.002)
-box(col, 'hider', 0.038, 0.038, 0.07, 0, 0.022, -0.627, 'black', bevel=0.002)                # z -0.662 .. -0.592
-for i in range(2):
-    box(col, 'hider_slot%d' % i, 0.04, 0.008, 0.016, 0, 0.022, -0.63 - i * 0.022, 'gun')
-box(col, 'hider_slot_v', 0.008, 0.04, 0.016, 0, 0.022, -0.642, 'gun')
-
-# ---- sights: flip-up rings. Rear ring centre (0, 0.1, 0.11); front ring + post, post tip at (0, 0.1, -0.41) ---------------------------
-box(col, 'front_base', 0.028, 0.026, 0.034, 0, 0.078, -0.41, 'black', bevel=0.0015)
-ring(col, 'front_ring', 0.0125, 0.0035, 0, 0.1, -0.41, 'black', seg=10)
-box(col, 'front_post', 0.005, 0.014, 0.005, 0, 0.0935, -0.41, 'black')
-box(col, 'rear_base', 0.04, 0.022, 0.044, 0, 0.088, 0.11, 'black', bevel=0.0015)
-ring(col, 'rear_ring', 0.0165, 0.0045, 0, 0.1, 0.11, 'black', seg=12)
-box(col, 'rear_earL', 0.008, 0.032, 0.03, 0.0215, 0.1, 0.11, 'black')
-box(col, 'rear_earR', 0.008, 0.032, 0.03, -0.0215, 0.1, 0.11, 'black')
-
-# ---- magwell + pistol grip (orange), trigger guard -----------------------------------------------------------------------------------
-box(col, 'magwell', 0.078, 0.072, 0.1, 0, -0.048, -0.05, 'orange', bevel=B)                  # y -0.084 .. -0.012, z -0.1 .. 0.0
-box(col, 'magwell_cut', 0.0805, 0.012, 0.07, 0, -0.07, -0.05, 'orangeDark')
-prof(col, 'grip', [(0.098, -0.05), (0.168, -0.05), (0.205, -0.19), (0.122, -0.19), (0.108, -0.13)], 0.056, 0, 'orange', bevel=B)
-box(col, 'grip_back', 0.058, 0.14, 0.012, 0, -0.12, 0.172, 'black', rot=(-0.26, 0, 0))
-box(col, 'grip_base', 0.06, 0.012, 0.09, 0, -0.192, 0.163, 'black')
-box(col, 'guard_bottom', 0.02, 0.016, 0.09, 0, -0.092, 0.057, 'orange', bevel=0.002)
-box(col, 'guard_front', 0.02, 0.04, 0.016, 0, -0.07, 0.014, 'orange', bevel=0.002)
-box(col, 'mag_release', 0.088, 0.012, 0.016, 0, -0.038, -0.108, 'black')
-
-# ---- stock (orange, angular) with a black buffer strip and butt pad ---------------------------------------------------------------------
-box(col, 'hinge', 0.07, 0.1, 0.03, 0, 0.002, 0.315, 'black', bevel=0.002)
-prof(col, 'stock', [(0.33, 0.058), (0.43, 0.05), (0.458, 0.026), (0.458, -0.076), (0.405, -0.092), (0.352, -0.04), (0.33, -0.04)], 0.064, 0, 'orange', bevel=B)
-box(col, 'buffer', 0.044, 0.014, 0.16, 0, 0.064, 0.4, 'black', bevel=0.0015)
-box(col, 'stock_cut', 0.0665, 0.016, 0.07, 0, -0.026, 0.395, 'orangeDark')
-box(col, 'butt_pad', 0.068, 0.13, 0.02, 0, -0.012, 0.469, 'black', bevel=0.003)
-
-# ---- magazine (black, curved, ribbed) - animated part: pivot at its top ---------------------------------------------------------------------
-pivot(col, 'mag', 0, -0.07, -0.05)
-prof(col, 'mag', [(-0.088, -0.07), (-0.1, -0.12), (-0.128, -0.172), (-0.172, -0.21), (-0.092, -0.21), (-0.054, -0.172), (-0.03, -0.12), (-0.018, -0.07)], 0.05, 0, 'black', bevel=0.002, part='mag')
-prof(col, 'mag_inset', [(-0.098, -0.1), (-0.111, -0.135), (-0.137, -0.177), (-0.157, -0.196), (-0.12, -0.196), (-0.084, -0.16), (-0.058, -0.125), (-0.046, -0.1)], 0.0522, 0, 'gun', part='mag')   # the lighter ribbed panel
-box(col, 'mag_plate', 0.054, 0.012, 0.084, 0, -0.214, -0.133, 'dark', rot=(0.5, 0, 0), part='mag')
-
-# ---- bolt / charging handle (right side) - animated: pivot at its rest position ------------------------------------------------------------
-pivot(col, 'bolt', 0.037, 0.047, 0.085)
-box(col, 'bolt_a', 0.014, 0.018, 0.05, 0.039, 0.047, 0.085, 'gun', part='bolt')
-box(col, 'bolt_knob', 0.018, 0.02, 0.012, 0.046, 0.047, 0.115, 'gun', part='bolt')
-
-# ---- trigger - animated --------------------------------------------------------------------------------------------------------------------------
-pivot(col, 'trigger', 0, -0.045, 0.085)
-box(col, 'trigger', 0.01, 0.03, 0.012, 0, -0.057, 0.085, 'gun', part='trigger')
-
-result = stats(col)
+result = dict(stats(col), flipped=[k for k, v in flips.items() if v], strip_solids=n_strip)

@@ -182,7 +182,7 @@
     if (H.djSlot) H.djSlot.querySelector('.dj').classList.toggle('used', dj === 2);
   };
 
-  /** Grenade hold timer under the crosshair: fills over the 3 s; red once the circle is coming for you. */
+  /** Grenade hold timer under the crosshair: fills over the hold time (1.8 s); red once the circle is coming for you. */
   H.nadeHold = function (show, frac, closing) {
     const e = H.el['nade-hold'];
     if (H.last.nhShow !== show) {

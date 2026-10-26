@@ -38,7 +38,7 @@
   /** Grenade throw timing (shared with weapons.js, which spawns the projectile at `release`). */
   const THROW = { total: 0.8, release: 0.47, hold: 0.3 }; // `hold`: the pin is out, the grenade waits here while aiming
   /** Punch timing. */
-  const PUNCH = { dur: 0.36 };
+  const PUNCH = { dur: 0.34 };
 
   /**
    * Per-weapon presentation spec (model units are ~metres before `scale`).
@@ -54,8 +54,8 @@
     // hip poses follow the RIVALS first-person view (solved from its reference screenshots: tools/solve-hip-pose.js): the gun sits low on the
     // right, big, and its muzzle points in towards the crosshair (hipYaw / hipPitch, blended out while aiming), the muzzle ends up
     // just right of and below the crosshair so the centre of the screen stays clear
-    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1, -0.41], scale: 0.6, hip: [0.12, -0.102, -0.352], hipYaw: 0.082, hipPitch: 0.17, sight: [0, 0.1, 0.11], er: 0.35, erCentre: 0.27, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
-    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.089, -0.322], hipYaw: 0.212, hipPitch: 0.3, sight: [0, 0.082, 0.095], er: 0.29, erCentre: 0.25, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
+    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1265, -0.36], scale: 0.6, hip: [0.12, -0.102, -0.352], hipYaw: 0, hipPitch: 0, sight: [0, 0.1265, 0.153], boltTravel: 0.05, er: 0.37, erCentre: 0.29, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
+    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.089, -0.322], hipYaw: 0, hipPitch: 0, sight: [0, 0.082, 0.095], er: 0.29, erCentre: 0.25, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
     fists: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'punch', reload: 'none', sprintPose: 0.6, cas: null, noAds: true },
     grenade: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'throw', reload: 'none', sprintPose: 0.7, cas: null, noAds: true },
   };
@@ -325,7 +325,6 @@
       this.punchSide = -1; // the hand of the NEXT punch alternates: -1 left, +1 right
       this.punchHand = 1;
       this.hitT = 99; // seconds since a punch connected
-      this.djT = 99; // seconds since a double jump
       this.flashT = 99;
       this.casingQ = 0; // casings waiting to be spawned by the renderer
       this.casingAt = -1; // delayed ejection
@@ -380,10 +379,8 @@
       this.sp.vr += 0.3;
     }
 
-    onDoubleJump() {
-      this.djT = 0;
-      this.sp.vy -= 0.4;
-    }
+    /** (The double jump has no reaction of its own in the first-person view: the fists do not flick.) */
+    onDoubleJump() {}
 
     /**
      * st: {id, prevId, ads, switchT, switchDur, reload, throwP, grenades, speed, grounded,
@@ -401,7 +398,6 @@
       this.flashT += dt;
       this.punchT += dt;
       this.hitT += dt;
-      this.djT += dt;
       this.nadeT += dt;
       if (st.id !== this.lastId) {
         this.lastId = st.id;
@@ -514,11 +510,6 @@
       ry += rl.rry;
       rz += rl.rrz;
 
-      // double jump: the whole view-model flicks upward and settles
-      const dj = pulse(this.djT, 0.1, 0.42);
-      y += 0.03 * dj;
-      rx += 0.12 * dj;
-
       // switching
       y += -0.34 * lower;
       rx += -0.95 * lower;
@@ -571,8 +562,8 @@
       o.spoon = 0;
       const bph = this.bobPhase;
       const stride = Math.sin(bph) * amp;
-      if (shown === 'fists') this._fists(o, lh, rh, st, w, L, S, dj, stride, amp, free);
-      else if (shown === 'grenade') this._grenade(o, lh, rh, st, w, L, S, dj, stride, amp, free, shown === st.id);
+      if (shown === 'fists') this._fists(o, lh, rh, st, w, L, S, stride, amp, free);
+      else if (shown === 'grenade') this._grenade(o, lh, rh, st, w, L, S, stride, amp, free, shown === st.id);
       else {
         // guns: the hands ride on the weapon; the supporting hand fetches the magazine on a reload
         const lm = shownSpec.lhMag;
@@ -609,7 +600,7 @@
         this.casingQ++;
         this.casingAt = -1;
       }
-      o.boltZ = boltZ;
+      o.boltZ = boltZ * ((shownSpec.boltTravel || 0.055) / 0.055); // (the bolt part slides this far back on a shot; the rifle top strip a little less than a pistol slide)
       o.slideZ = slideZ;
       o.magY = rl.magY;
       o.magZ = rl.magZ;
@@ -623,10 +614,10 @@
     }
 
     /**
-     * Fists: a guard stance with a hand in front of each side, alternating punches, a run
-     * swing, a tuck while sliding, a lift on jumps and a quick flick on the double jump.
+     * Fists: a guard stance with a block fist in front of each side, alternating punches, a run
+     * swing, a tuck while sliding and a lift on jumps.
      */
-    _fists(o, lh, rh, st, w, L, S, dj, stride, amp, free) {
+    _fists(o, lh, rh, st, w, L, S, stride, amp, free) {
       const t = this.t;
       // breathing, opposite phase in each hand
       const br = (1 - w.move) * (1 - w.sprint);
@@ -659,43 +650,36 @@
       const air = w.air * Math.max(-0.035, Math.min(0.045, -vy * 0.004));
       lh.y += air;
       rh.y += air;
-      // double jump: both hands whip up and back, then settle
-      lh.y += 0.07 * dj;
-      rh.y += 0.07 * dj;
-      lh.z += 0.045 * dj;
-      rh.z += 0.045 * dj;
-      lh.rx += 0.3 * dj;
-      rh.rx += 0.3 * dj;
-      lh.x += -0.03 * dj;
-      rh.x += 0.03 * dj;
-
-      // punches: windup, a fast strike towards the centre, a short hold, a smooth recovery
+      // punches: the block fist is drawn back, snaps straight ahead along the view (rising to the crosshair, flattening, with a
+      // quarter turn of the wrist), stays out for a beat and is brought back; the other fist stays up as a guard
       if (this.punchT < PUNCH.dur) {
         const u = this.punchT / PUNCH.dur;
-        const pull = seg(u, 0, 0.1) * (1 - seg(u, 0.1, 0.16));
-        const strike = seg(u, 0.1, 0.27);
-        const back = seg(u, 0.42, 1);
+        const pull = seg(u, 0, 0.14) * (1 - seg(u, 0.14, 0.2));
+        const strike = seg(u, 0.14, 0.3);
+        const back = seg(u, 0.44, 1);
         const ext = strike * (1 - back);
         const side = this.punchHand; // +1 right, -1 left
         const h = side > 0 ? rh : lh;
         const g = side > 0 ? lh : rh;
-        h.z += -0.31 * ext + 0.05 * pull;
-        h.y += 0.05 * ext - 0.02 * pull;
-        h.x += -side * 0.11 * ext + side * 0.015 * pull;
-        h.rx += -0.15 * ext + 0.18 * pull;
-        h.ry += -side * 0.22 * ext;
-        h.rz += side * 0.25 * ext;
-        // the other hand stays up as a guard and tucks in slightly
-        g.x += -side * 0.014 * ext;
-        g.y += 0.012 * ext;
-        g.z += 0.02 * ext;
-        // the body turns into the punch (view-model root, very small)
-        o.ry += -side * 0.05 * ext;
-        o.x += side * 0.012 * ext;
+        h.z += -0.3 * ext + 0.075 * pull;
+        h.y += 0.075 * ext - 0.03 * pull;
+        h.x += -side * 0.105 * ext + side * 0.03 * pull;
+        h.rx += -0.2 * ext + 0.24 * pull;
+        h.ry += -side * 0.12 * ext + side * 0.1 * pull;
+        h.rz += side * 0.45 * ext - side * 0.12 * pull;
+        // the guard fist tucks back and in
+        g.x += -side * 0.02 * ext;
+        g.y += -0.012 * ext;
+        g.z += 0.035 * ext;
+        g.rx += 0.08 * ext;
+        // the shoulder follows the punch (view-model root, small)
+        o.ry += -side * 0.04 * ext;
+        o.rx += -0.025 * ext;
+        o.x += -side * 0.01 * ext;
         // impact: a little compression when it connects
         if (this.hitT < 0.14) {
           const hk = pulse(this.hitT, 0.03, 0.14);
-          h.z += 0.03 * hk * (1 - back);
+          h.z += 0.035 * hk * (1 - back);
         }
       }
     }
@@ -704,7 +688,7 @@
      * Grenade: hold -> pull the pin with the other hand -> wind up -> throw -> recover,
      * and a fresh grenade is brought up afterwards.
      */
-    _grenade(o, lh, rh, st, w, L, S, dj, stride, amp, free, current) {
+    _grenade(o, lh, rh, st, w, L, S, stride, amp, free, current) {
       const t = this.t;
       const p = current ? st.throwP : -1;
       // after the release the hand is empty; once the throw is over a fresh grenade grows in
@@ -735,8 +719,6 @@
       const air = w.air * Math.max(-0.03, Math.min(0.04, -vy * 0.0035));
       lh.y += air;
       rh.y += air;
-      lh.y += 0.05 * dj;
-      rh.y += 0.05 * dj;
 
       if (p >= 0) {
         // pin pull happens before the hold point (0.3): reach, pull, then the hand drops away

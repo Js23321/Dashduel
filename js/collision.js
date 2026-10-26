@@ -12,6 +12,7 @@
 
   const EPS = 1e-4;
   const CELL = 8;
+  const SKIN = 0.02; // how much deeper than its own slice an overlap may be and still count as that slice's collision
   const MAX_MOVE = 0.25; // largest slice of movement resolved at once (stops tunnelling)
 
   /** Highest ramp surface under a body footprint at (px,pz) with half-width hw. */
@@ -49,6 +50,10 @@
       this.ramps = [];
       this.pads = [];
       this.killY = def.killY != null ? def.killY : -60;
+      // the play box: an invisible fence on the inner faces of the map's outer walls. Nothing can leave it, whatever its speed, so
+      // a launch, a bunny hop over a wall top or a physics glitch can never drop a body outside the map (def.play = [minX, minZ, maxX, maxZ])
+      // (a fifth number is a ceiling: nothing rises above it, so a grenade boost cannot carry a body over the top of the walls either)
+      this.play = def.play ? { minX: def.play[0], minZ: def.play[1], maxX: def.play[2], maxZ: def.play[3], maxY: def.play[4] != null ? def.play[4] : Infinity } : null;
       for (let i = 0; i < def.solids.length; i++) this._add(def.solids[i]);
       for (const p of def.pads || []) {
         this.pads.push({
@@ -232,16 +237,61 @@
         if (sx !== 0) {
           b.x += sx;
           this._resolveH(b, 0, sx);
+          if (this.play) this._fence(b, 0);
         }
         if (sz !== 0) {
           b.z += sz;
           this._resolveH(b, 1, sz);
+          if (this.play) this._fence(b, 1);
         }
         if (sy !== 0) {
           b.y += sy;
           this._resolveV(b, sy);
         }
       }
+      this._unstick(b);
+      if (this.play) this.contain(b);
+    }
+
+    /** Push a body back inside the play box (and report it as a wall hit, so the movement code stops it like any wall). */
+    _fence(b, axis) {
+      const p = this.play,
+        hw = b.hw;
+      if (axis === 0) {
+        if (b.x < p.minX + hw) {
+          b.x = p.minX + hw;
+          b.hitX = -1;
+        } else if (b.x > p.maxX - hw) {
+          b.x = p.maxX - hw;
+          b.hitX = 1;
+        }
+      } else if (b.z < p.minZ + hw) {
+        b.z = p.minZ + hw;
+        b.hitZ = -1;
+      } else if (b.z > p.maxZ - hw) {
+        b.z = p.maxZ - hw;
+        b.hitZ = 1;
+      }
+    }
+
+    /** Pull a body that is somehow outside the play box back in (a no-op for a map without one). */
+    contain(b) {
+      const p = this.play;
+      if (!p) return;
+      this._fence(b, 0);
+      this._fence(b, 1);
+      if (b.y + b.h > p.maxY) {
+        b.y = p.maxY - b.h;
+        b.hitUp = true;
+      }
+    }
+
+    /** Is the point inside the play box (always true for a map without one)? */
+    inPlay(x, z, margin) {
+      const p = this.play;
+      if (!p) return true;
+      const m = margin || 0;
+      return x >= p.minX + m && x <= p.maxX - m && z >= p.minZ + m && z <= p.maxZ - m;
     }
 
     _resolveH(b, axis, d) {
@@ -258,6 +308,11 @@
           b.stepped = true;
           continue;
         }
+        // Only the slice that really ran into the solid may push the body back along its own axis. An overlap that is deeper than
+        // the slice (left by another axis, a body that grew taller, a ramp edge) must not be "resolved" by throwing the body to the
+        // FAR face of the solid - that was the teleport: _unstick() finds the nearest way out instead.
+        const pen = axis === 0 ? (d > 0 ? b.x + hw - s.minX : s.maxX - (b.x - hw)) : d > 0 ? b.z + hw - s.minZ : s.maxZ - (b.z - hw);
+        if (pen > Math.abs(d) + SKIN) continue;
         if (axis === 0) {
           if (d > 0) {
             b.x = s.minX - hw;
@@ -282,13 +337,66 @@
       for (let i = 0; i < list.length; i++) {
         const s = list[i];
         if (!this._overlap(s, b.x, b.y, b.z, hw, b.h)) continue;
+        // (same rule as _resolveH: a body that merely brushes the SIDE of a solid must not be lifted onto its top, or dropped below it)
         if (d < 0) {
-          b.y = s.isRamp ? rampSupport(s, b.x, b.z, hw) : s.maxY;
+          const top = s.isRamp ? rampSupport(s, b.x, b.z, hw) : s.maxY;
+          if (top - b.y > -d + SKIN) continue;
+          b.y = top;
           b.landed = true;
         } else {
+          if (b.y + b.h - s.minY > d + SKIN) continue;
           b.y = s.minY - b.h;
           b.hitUp = true;
         }
+      }
+    }
+
+    /**
+     * The nearest way out of whatever the body still overlaps after a move (a few millimetres of residue from touching two solids at
+     * once, a body that stood up under an edge...): the smallest of up / down / four sides, never the far end of a long solid.
+     */
+    _unstick(b) {
+      const hw = b.hw;
+      for (let iter = 0; iter < 4; iter++) {
+        const list = this.query(b.x - hw, b.x + hw, b.z - hw, b.z + hw, this._tmp);
+        let moved = false;
+        for (let i = 0; i < list.length; i++) {
+          const s = list[i];
+          if (!this._overlap(s, b.x, b.y, b.z, hw, b.h)) continue;
+          const top = s.isRamp ? rampSupport(s, b.x, b.z, hw) : s.maxY;
+          let best = top - b.y,
+            dir = 0;
+          if (!s.isRamp) {
+            const c = [b.y + b.h - s.minY, b.x + hw - s.minX, s.maxX - (b.x - hw), b.z + hw - s.minZ, s.maxZ - (b.z - hw)];
+            for (let k = 0; k < 5; k++) {
+              if (c[k] < best) {
+                best = c[k];
+                dir = k + 1;
+              }
+            }
+          }
+          if (dir === 0) {
+            b.y = top;
+            b.landed = true;
+          } else if (dir === 1) {
+            b.y = s.minY - b.h;
+            b.hitUp = true;
+          } else if (dir === 2) {
+            b.x = s.minX - hw;
+            b.hitX = 1;
+          } else if (dir === 3) {
+            b.x = s.maxX + hw;
+            b.hitX = -1;
+          } else if (dir === 4) {
+            b.z = s.minZ - hw;
+            b.hitZ = 1;
+          } else {
+            b.z = s.maxZ + hw;
+            b.hitZ = -1;
+          }
+          moved = true;
+        }
+        if (!moved) break;
       }
     }
 

@@ -1152,6 +1152,37 @@
       R._regCyl(m, b.x, b.z, b.r, b.y0 - 1, b.y1);
     }
 
+    // barrier (Arena): the fence goes on above the wall tops as a faint force field, so the limit of the map can be seen
+    if (def.barrier && def.play) {
+      const bar = def.barrier,
+        p = def.play;
+      const mat = new THREE.MeshBasicMaterial({ color: bar.color, transparent: true, opacity: 0.16, depthWrite: false, side: THREE.DoubleSide, fog: false });
+      const h = bar.y1 - bar.y0,
+        cy = bar.y0 + h / 2,
+        w = p[2] - p[0],
+        d = p[3] - p[1],
+        cx = (p[0] + p[2]) / 2,
+        cz = (p[1] + p[3]) / 2;
+      const panels = [
+        [w, h, cx, cy, p[1], 0],
+        [w, h, cx, cy, p[3], 0],
+        [d, h, p[0], cy, cz, Math.PI / 2],
+        [d, h, p[2], cy, cz, Math.PI / 2],
+      ];
+      for (const [pw, ph, x, y, z, ry] of panels) {
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), mat);
+        m.position.set(x, y, z);
+        m.rotation.y = ry;
+        m.renderOrder = 3;
+        grp.add(m);
+      }
+      const roof = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+      roof.rotation.x = Math.PI / 2;
+      roof.position.set(cx, bar.y1, cz);
+      roof.renderOrder = 3;
+      grp.add(roof);
+    }
+
     // water (Docks): a large plane at the surface; the map's kill height sits just below it, so falling in ends the life
     if (def.water) {
       const w = def.water;

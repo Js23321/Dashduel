@@ -6,7 +6,7 @@ part's pivot) and by material NAME (the game maps names to its own materials). R
 import bpy, bmesh, json
 
 OUT = r'C:\Users\ryder\Downloads\Rivel\js\models-weapons.js'
-MODELS = {'rifle': 'WEAPON_rifle', 'pistol': 'WEAPON_pistol', 'grenade': 'WEAPON_grenade', 'hands': 'WEAPON_hands'}
+MODELS = {'rifle': 'WEAPON_rifle', 'pistol': 'WEAPON_pistol', 'grenade': 'WEAPON_grenade'}  # (the hands are block fists built in js/viewmodel.js; WEAPON_hands is no longer exported)
 
 
 def r4(v):

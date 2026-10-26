@@ -18,7 +18,7 @@
   const P = (RV.PHYS = {
     STEP: 1 / 120, // fixed simulation step (seconds)
     GRAVITY: 26,
-    JUMP_V: 8.6,
+    JUMP_V: 9.12, // apex 1.6 m (v^2 / 2g)
     JUMP_BUFFER: 0.14,
     COYOTE: 0.09,
 
@@ -34,20 +34,21 @@
 
     // There is no separate walk and sprint any more: the default speed IS the old sprint speed, in every direction (a slide key replaces
     // the old sprint key). WALK and SPRINT stay as aliases of it for the code that reads them.
-    RUN: 10.5,
-    WALK: 10.5,
-    SPRINT: 10.5,
+    RUN: 8.5,
+    WALK: 8.5,
+    SPRINT: 8.5,
     CROUCH: 4.0,
-    GROUND_ACCEL: 12,
-    FRICTION: 6.5,
-    STOP_SPEED: 3.0,
+    GROUND_ACCEL: 14, // (must stay above FRICTION or the run speed could not be reached)
+    FRICTION: 11, // crisp stops: from a run the body is still in about 0.15 s and half a metre
+    STOP_SPEED: 4.5,
     LAND_GRACE: 0.09, // reduced friction right after landing (hop window)
+    LAND_GRACE_FRICTION: 0.12, // ... to this share of FRICTION
 
     // air
     AIR_STRAFE_ACCEL: 30, // m/s^2 of sideways authority
     AIR_STRAFE_CAP: 1.8, // m/s of wish-speed the strafe rule can add along a direction
     AIR_BRAKE: 10, // authority when you push against your own velocity
-    AIR_WISH_SPEED: 7.0, // low-speed steering target
+    AIR_WISH_SPEED: 6.0, // low-speed steering target
     AIR_ACCEL: 9,
     AIR_STEER_RATE: 2.6, // rad/s, forward-only mouse steering that keeps speed
     MAX_SPEED: 60,
@@ -56,17 +57,17 @@
     SLIDE_MIN: 5.5,
     SLIDE_END: 3.0,
     SLIDE_BOOST: 2.5,
-    SLIDE_BOOST_CAP: 15,
+    SLIDE_BOOST_CAP: 13,
     SLIDE_BOOST_CD: 0.6,
-    SLIDE_DECEL: 3.2,
+    SLIDE_DECEL: 4.6, // a slide runs out in about 1.5 s
     SLIDE_TURN: 1.5,
     SLIDE_JUMP_BONUS: 1.5,
-    SLIDE_JUMP_CAP: 19,
+    SLIDE_JUMP_CAP: 16,
 
     // walls
     WALL_PROBE: 0.45, // how close a wall must be to latch on (generous: grazing it counts)
     WALLRUN_MIN: 5.0, // speed along the wall needed to start
-    WALLRUN_SPEED: 10,
+    WALLRUN_SPEED: 8.8,
     WALLRUN_ACCEL: 30,
     WALLRUN_MAX_TIME: 3.2,
     WALLRUN_STALL: 3.5,
@@ -78,7 +79,7 @@
     WALL_GRACE: 0.12,
     WALLJUMP_UP: 8.8,
     WALLJUMP_NORMAL: 0.8,
-    WALLJUMP_MIN_SPEED: 9,
+    WALLJUMP_MIN_SPEED: 7.5,
     WALLJUMP_MIN_OUT: 5,
     WALLJUMP_COYOTE: 0.1,
     WALLJUMP_NO_STEER: 0.35, // forward-steering is paused briefly so the redirect carries
@@ -86,7 +87,7 @@
     PAD_CD: 0.3,
 
     // double jump (fists only)
-    DJ_V: 8.4, // upward speed of the second jump (the vertical speed is replaced, not added)
+    DJ_V: 9.12, // upward speed of the second jump (the vertical speed is replaced, not added): the same as JUMP_V, so it rises exactly as high as a normal jump
     DJ_PUSH: 2.2, // m/s of redirect towards the held direction (never raises speed past sprint / current speed)
     DJ_MIN_AIR: 0.04, // seconds after leaving the ground before the extra jump can fire
   });
@@ -313,6 +314,7 @@
       const preVy = b.vy;
       b.grounded = wasGrounded && !this.jumpedThisStep ? b.grounded : false;
       w.move(b, b.vx * dt, dy, b.vz * dt);
+      w.contain(b); // (a body that stands outside the play box with no speed is not moved by the slices above)
       if (b.hitX !== 0) b.vx = 0;
       if (b.hitZ !== 0) b.vz = 0;
       if (b.hitUp && b.vy > 0) b.vy = 0;
@@ -450,7 +452,7 @@
       // friction
       if (speed > 0.001) {
         const grace = this.groundTime < P.LAND_GRACE;
-        const fr = P.FRICTION * (grace ? 0.2 : 1);
+        const fr = P.FRICTION * (grace ? P.LAND_GRACE_FRICTION : 1);
         const drop = Math.max(speed, P.STOP_SPEED) * fr * dt;
         const ns = Math.max(0, speed - drop);
         const k = ns / speed;

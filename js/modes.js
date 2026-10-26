@@ -151,6 +151,8 @@
       // online: opponents do not wait for you. The menu opens over the live match, your keys are released.
       if (G.menuOpen) return;
       G.menuOpen = true;
+      G.menuOpenedAt = performance.now();
+      G.lockTries = 0;
       G.adsToggled = false;
       RV.input.enabled = false;
       RV.input.clear();
@@ -170,7 +172,22 @@
     RV.ui.showPause();
   };
 
+  /**
+   * "Resume": capture the mouse again, and resume once the browser grants it. Chrome refuses a lock request made within about
+   * a second of the player leaving it with Esc, so the request is repeated for a moment instead of leaving a dead button
+   * (in an online match the game keeps running behind the menu, so a menu that will not close looks like a frozen game).
+   */
+  G.resumeRequest = function () {
+    if (RV.input.noLock) {
+      G.resume();
+      return;
+    }
+    G.lockTries = 12;
+    RV.input.requestLock();
+  };
+
   G.resume = function () {
+    G.lockTries = 0;
     if (G.menuOpen) {
       G.menuOpen = false;
       RV.input.enabled = G.state === 'playing';
@@ -208,6 +225,15 @@
   /** Lock changes: Esc releases the mouse -> pause; clicking Resume re-locks -> resume. */
   G.onLockChange = function (locked, error) {
     if (RV.input.noLock) return;
+    if (locked) G.lockTries = 0;
+    else if (error && G.lockTries > 0 && (G.menuOpen || G.state === 'paused')) {
+      // refused right after Esc: ask again shortly
+      G.lockTries--;
+      setTimeout(() => {
+        if (G.lockTries > 0 && (G.menuOpen || G.state === 'paused') && !RV.input.isLocked()) RV.input.requestLock();
+      }, 160);
+      return;
+    }
     if (locked) G.awaitLock = false;
     // an online match that started by itself (no click on "Enter match") cannot lock the mouse until the player clicks:
     // that refusal is expected, so show "click to capture the mouse" instead of opening the pause menu
@@ -443,6 +469,8 @@
       if (!G.playerDead) {
         for (let i = 0; i < RV.WEAPONS.length; i++) if (inp.consume('weapon' + (i + 1))) G.weapons.select(i);
         if (inp.consume('lastweapon')) G.weapons.selectLast();
+        if (inp.consume('quickmelee')) G.weapons.quickMelee();
+        if (inp.consume('quickgrenade')) G.weapons.quickGrenade();
       }
       if (inp.consume('respawn')) G.modeImpl.onRespawnKey && G.modeImpl.onRespawnKey(G);
       if (inp.consume('setspawn')) G.modeImpl.onSetSpawnKey && G.modeImpl.onSetSpawnKey(G);
@@ -502,7 +530,7 @@
     }
     G.zoom = G.weapons.updateAds(live ? dtReal : 0, wantAds);
     if (live) G.applyAdsLook(pl, G.zoom);
-    const kickTarget = S.fovKick ? RV.clamp((speed - 10) * 0.5, 0, 12) : 0;
+    const kickTarget = S.fovKick ? RV.clamp((speed - 8.2) * 0.5, 0, 12) : 0;
     G.fovBoost = RV.damp(G.fovBoost, kickTarget, 5, dtReal);
     const baseH = S.fov + G.fovBoost * (1 - G.zoom);
     G.hfov = G.zoom > 0 ? RV.lerp(baseH, G.weapons.adsTargetFov(S.fov), G.zoom) : baseH;
@@ -538,7 +566,7 @@
       // footsteps (distance based, quiet; none while sliding / airborne)
       if (pl.b.grounded && pl.mode !== 'slide' && speed > 1.5) {
         G.stepAcc = (G.stepAcc || 0) + speed * dtReal;
-        const iv = speed > 9 ? 2.4 : 1.75;
+        const iv = speed > 7.5 ? 2.4 : 1.75;
         if (G.stepAcc >= iv) {
           G.stepAcc -= iv;
           RV.audio.play('step', RV.clamp(speed / 11, 0.35, 1));
@@ -586,7 +614,7 @@
     hud.setVitals(G.hp);
     const wp = G.weapons;
     hud.setWeapon(wp.weapon, wp.ammo, wp.reloading, wp.grenades, wp.grenadeCharge(), wp.grenades < RV.WEAPON_BY_ID.grenade.maxCount ? wp.gregen : 0, wp.reserve);
-    hud.setProtect(G.mode === 'online' ? RV.online.prot : Math.max(0, G.protUntil - G.time));
+    hud.setProtect(RV.online.isNet(G) ? RV.online.prot : Math.max(0, G.protUntil - G.time));
     hud.setLockPrompt(G.awaitLock && G.state === 'playing' && !G.menuOpen && !RV.input.isLocked());
     hud.setWeaponBar(wp.cur, wp.grenades, wp.grenadeCharge(), wp.weapon.doubleJump ? (pl.djUsed ? 2 : 1) : 0);
     rr.vm.hidden = false;

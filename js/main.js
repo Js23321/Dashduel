@@ -246,6 +246,15 @@
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || RV.input.capture) return;
       if (RV.game.state === 'playing') {
+        // an online match keeps running behind its menu, and that menu is not a paused state the keyboard handler of the menus
+        // sees: Esc closes it here (not within a moment of it opening: that is the same key press that opened it)
+        if (RV.game.menuOpen) {
+          if (RV.ui.current === 'pause') {
+            if (performance.now() - RV.game.menuOpenedAt > 350) RV.game.resumeRequest();
+          } else RV.ui.back(); // settings / loadout opened from that menu: one step back
+          e.stopImmediatePropagation();
+          return;
+        }
         // keyboard lock can swallow the browser's own Esc handling: pause explicitly
         RV.input.exitLock();
         if (RV.input.noLock) RV.game.pause();

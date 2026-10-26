@@ -63,6 +63,7 @@
       this.holding = false; // pin out, grenade held while aiming
       this.holdT = 0; // seconds the grenade has been held at the hold pose
       this.thrown = false; // the grenade of this throw has left the hand
+      this.quick = null; // a running quick melee / quick grenade (F / G), see below
       this._syncView();
     }
 
@@ -103,6 +104,7 @@
 
     select(i) {
       if (i < 0 || i >= this.slots.length || i === this.cur) return false;
+      if (!this._byQuick) this.quick = null; // choosing a weapon by hand ends a quick action: nothing is put back behind your back
       this.cancelHeld(); // before the release nothing is lost; after it the grenade is already out
       this.prevId = this.weapon.id; // the old weapon is lowered first, then the new one is raised
       this.last = this.cur;
@@ -126,6 +128,88 @@
       return this.select((this.cur + dir + n) % n);
     }
 
+    // ---------------------------------------------------------------- quick actions
+    /**
+     * F: take the fists out, throw ONE punch as soon as they are up, and put the weapon you had back. The fists are in hand for the whole
+     * of it (about 0.65 s), and the double jump belongs to the fists, so a jump pressed in that time frame is a double jump.
+     * With the fists already out it is just a punch.
+     */
+    quickMelee() {
+      if (this.quick || !this.g.canShoot()) return false;
+      if (this.cur === 2) {
+        this.quick = { kind: 'melee', prev: -1, last: this.last, stage: 0, wait: 0 };
+        return true;
+      }
+      const prev = this.cur,
+        last = this.last;
+      this._quickSelect(2);
+      this.quick = { kind: 'melee', prev, last, stage: 0, wait: 0 };
+      return true;
+    }
+
+    /** G: take a grenade out, throw it at once (no holding, no aiming circle), and put the weapon you had back. */
+    quickGrenade() {
+      if (this.quick || !this.g.canShoot()) return false;
+      if (this.grenades <= 0) {
+        RV.audio.play('empty');
+        RV.hud.toast('Grenade ready in ' + Math.ceil(this.gregen) + ' s');
+        return false;
+      }
+      if (this.gcd > 0 || this.throwT >= 0) return false;
+      if (this.cur === 3) return this._startThrow(true); // already in hand: a plain throw
+      const prev = this.cur,
+        last = this.last;
+      this._quickSelect(3);
+      this.quick = { kind: 'nade', prev, last, stage: 0, wait: 0 };
+      return true;
+    }
+
+    _quickSelect(i) {
+      this._byQuick = true;
+      this.select(i);
+      this._byQuick = false;
+    }
+
+    /** The quick action is over (or has to stop): the weapon that was in hand is back, and the "previous weapon" slot is as it was. */
+    _quickEnd() {
+      const q = this.quick;
+      this.quick = null;
+      if (!q || q.prev < 0 || this.cur === q.prev) return;
+      this._quickSelect(q.prev);
+      this.last = q.last;
+    }
+
+    _quickStep(dt, ctx) {
+      const q = this.quick;
+      if (!q) return;
+      q.wait += dt;
+      if (this.g.playerDead) return this._quickEnd();
+      if (this.cur !== (q.kind === 'melee' ? 2 : 3)) {
+        this.quick = null;
+        return;
+      }
+      if (q.stage === 0) {
+        // waiting for the weapon to come up, then the one punch / the pin (a throw starts without holding: it is released by itself)
+        if (q.kind === 'melee') {
+          if (this.switchT <= 0 && this.cd <= 0 && ctx.canFire) {
+            this._punch(ctx);
+            this.cd = this.weapon.interval;
+            this.fireBuf = 0;
+            q.stage = 1;
+            q.wait = 0;
+          }
+        } else if (this.switchT <= 0 && this.gcd <= 0 && ctx.canFire && this._startThrow(false)) {
+          q.stage = 1;
+          q.wait = 0;
+        }
+        if (q.stage === 0 && q.wait > 1.2) this._quickEnd(); // (could not start: the frozen countdown, a refusal: give the weapon back)
+        return;
+      }
+      if (q.kind === 'melee') {
+        if (q.wait >= this.weapon.interval + 0.1) this._quickEnd(); // the punch has landed and its cooldown is over
+      } else if (this.throwT < 0 || (this.thrown && this.throwT >= RV.vmanim.THROW.total * RV.vmanim.THROW.release + 0.2)) this._quickEnd(); // thrown (or cancelled)
+    }
+
     cancelThrow() {
       this.throwT = -1;
       this.thrown = false;
@@ -134,7 +218,7 @@
 
     /** The player gave up a held grenade (R, switching weapon, dying): the server must know too. */
     cancelHeld() {
-      if (this.throwT >= 0 && !this.thrown && this.g.mode === 'online') RV.online.sendNadeCancel();
+      if (this.throwT >= 0 && !this.thrown && RV.online.isNet(this.g)) RV.online.sendNadeCancel();
       this.cancelThrow();
     }
 
@@ -144,7 +228,7 @@
       this.reloading = true;
       this.reloadT = w.reload;
       RV.audio.play('reload', w.id);
-      if (this.g.mode === 'online') RV.online.sendReload();
+      if (RV.online.isNet(this.g)) RV.online.sendReload();
     }
 
     /** 0..1 progress of the next grenade being restocked (1 = full stock). */
@@ -262,6 +346,8 @@
         if (this.cd < 0) this.cd = 0;
       }
 
+      this._quickStep(dt, ctx);
+
       // throw sequence: pin -> hold (aiming, path preview, then the circle comes for you) -> wind-up ->
       // release (spawns the projectile exactly once) -> recover. R (or switching weapon) cancels a held grenade.
       this.holding = false;
@@ -322,7 +408,7 @@
       this.throwT = 0;
       this.thrown = false;
       RV.audio.play('pin');
-      if (this.g.mode === 'online') RV.online.sendNadePin();
+      if (RV.online.isNet(this.g)) RV.online.sendNadePin();
       return true;
     }
 
@@ -338,7 +424,7 @@
       if (this.grenades < gw.maxCount && this.gregen > this.regenTime()) this.gregen = this.regenTime();
       this.g.session.grenades = (this.g.session.grenades || 0) + 1;
       this.throwT = T.total * T.release; // the hand follows through and recovers
-      if (this.g.mode === 'online') RV.online.sendNadeSelf(); // the server decides when / where it goes off
+      if (RV.online.isNet(this.g)) RV.online.sendNadeSelf(); // the server decides when / where it goes off
       else RV.grenades.detonateAtPlayer(this.g, gw);
     }
 
@@ -351,7 +437,7 @@
       if (this.grenades < gw.maxCount && this.gregen > this.regenTime()) this.gregen = this.regenTime();
       this.g.session.grenades = (this.g.session.grenades || 0) + 1;
       RV.audio.play('throw');
-      if (this.g.mode === 'online') RV.online.sendNade(ctx.fwd); // the grenade appears when the server spawns it
+      if (RV.online.isNet(this.g)) RV.online.sendNade(ctx.fwd); // the grenade appears when the server spawns it
       else RV.grenades.throwFrom(this.g, ctx.eye, ctx.fwd, ctx.vel, gw);
     }
 
@@ -382,7 +468,7 @@
         }
       }
       let landed = false;
-      if (g.mode === 'online') RV.online.sendPunch(w, o, d);
+      if (RV.online.isNet(g)) RV.online.sendPunch(w, o, d);
       if (hitBot && hitBot.net) {
         // remote opponent: predicted feedback only, the damage comes back as a confirmation
         landed = true;
@@ -446,7 +532,7 @@
       // 3. apply the result immediately
       // (online: the shot is sent to the opponent, whose client decides the hit with lag compensation and
       //  sends the confirmation back; locally we only show the impact)
-      if (g.mode === 'online') RV.online.sendShot(w, o, d);
+      if (RV.online.isNet(g)) RV.online.sendShot(w, o, d);
       let endT = tWorld;
       if (hitBot && hitBot.net) {
         endT = tBot;

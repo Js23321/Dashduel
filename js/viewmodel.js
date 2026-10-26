@@ -9,8 +9,8 @@
  * small set of metal / polymer materials that reflect the sky of the current map.
  *
  * Four weapons only: rifle, pistol (handgun), fists, grenade. Every one of them is
- * held by the same pair of blocky hands (a simple Roblox-style block hand with a
- * short sleeve), so the style is consistent. The hands are children of the weapon's
+ * held by the same pair of block fists (one rectangular block each: a black sleeve
+ * and a hand on its end), so the style is consistent. The hands are children of the weapon's
  * root, so they follow every weapon animation for free; the animator only adds small
  * per-hand offsets (supporting hand on a reload, punches, the grenade pin...).
  */
@@ -270,6 +270,8 @@
       orange: M.alloy(0xe8922a, 0.1), orangeDark: M.alloy(0xb86a14, 0.1), black: M.alloy(0x16181d, 0.25), green: M.alloy(0x2f9a3e, 0.1), greenDark: M.alloy(0x1f6e2c, 0.1),
       navy: M.alloy(0x3a4672, 0.2), skinDark: new THREE.MeshStandardMaterial({ color: 0xb98462, roughness: 0.85, metalness: 0 }),
       acc: M.glow(0x2ee6ff), accY: M.glow(0xffc400), white: M.glow(0xffffff),
+      // the RIVALS assault rifle's own five colours (from its mesh export): navy frame and rings, orange shell, red-orange lower, grey trim, black magazine
+      rvDark: M.alloy(0x0e172e, 0.2), rvOrange: M.alloy(0xe39c3e, 0.1), rvOrangeDark: M.alloy(0xd6743a, 0.1), rvGrey: M.alloy(0x565756, 0.3), rvBlack: M.alloy(0x090909, 0.25),
     });
     return t[name] || M.gun;
   }
@@ -298,30 +300,15 @@
   }
   const MODEL_FOR = { rifle: 'rifle', pistol: 'pistol', grenade: 'grenade' };
 
-  // -------------------------------------------------------------------------
-  // Blocky hands. One shared design: a back-of-hand block, two curled finger blocks, a thumb
-  // block, a short bare forearm, a cuff and a dark sleeve. Built facing -Z with the palm
-  // down (-Y); `side` +1 = right hand, -1 = left hand (the thumb is on the inside).
-  // Proportions are first-person realistic: the palm is ~5 cm wide.
-  // -------------------------------------------------------------------------
-  function buildHand(M, side) {
+  /**
+   * The hands: ONE rectangular block per hand, the same for every weapon (guns, fists and grenade). The rear part (the arm, coming in from the
+   * bottom of the screen) is a black sleeve and most of the block; the front part is the hand. Built facing -Z; the origin is the seam between the two.
+   */
+  const FIST = { w: 0.094, t: 0.094, hand: 0.08, sleeve: 0.26 };
+  function buildFist(M) {
     const h = new THREE.Group();
-    if (RV.models && RV.models.hands) {
-      addModel(h, M, {}, RV.models.hands, side > 0 ? 'handR' : 'handL');
-      h.rotation.order = 'YXZ';
-      RV.mergeGroup(h);
-      return h;
-    }
-    const sk = M.skin;
-    box(h, sk, 0.052, 0.03, 0.058, 0, 0, 0); // back of hand
-    box(h, sk, 0.05, 0.024, 0.034, 0, -0.004, -0.044); // fingers, first block
-    box(h, sk, 0.05, 0.034, 0.022, 0, -0.026, -0.066); // fingers, curled block
-    box(h, sk, 0.018, 0.02, 0.046, -0.034 * side, 0.004, -0.02); // thumb
-    box(h, sk, 0.016, 0.018, 0.026, -0.03 * side, -0.012, -0.05); // thumb tip
-    box(h, sk, 0.046, 0.04, 0.09, 0, 0.002, 0.072); // wrist + forearm
-    box(h, M.cuff, 0.062, 0.058, 0.018, 0, 0.002, 0.125); // cuff
-    box(h, M.cuffLine, 0.0635, 0.0595, 0.004, 0, 0.002, 0.136); // thin accent line
-    box(h, M.sleeve, 0.064, 0.06, 0.34, 0, 0.002, 0.3); // sleeve
+    box(h, M.skin, FIST.w, FIST.t, FIST.hand, 0, 0, -FIST.hand / 2); // the hand: the front of the block
+    box(h, modelMaterial(M, 'black'), FIST.w, FIST.t, FIST.sleeve, 0, 0, FIST.sleeve / 2); // the sleeve: black, and most of the block
     h.rotation.order = 'YXZ';
     RV.mergeGroup(h);
     return h;
@@ -333,13 +320,14 @@
    * hand (arm rises towards the weapon), y turns it inwards, z rolls the palm.
    */
   const HAND = {
-    rifle: { R: { p: [0.03, -0.074, 0.092], r: [0.3, 0.2, -1.1] }, L: { p: [-0.03, -0.03, -0.135], r: [0.2, -0.5, 0.95] } },
-    pistol: { R: { p: [0.027, -0.05, 0.05], r: [0.35, 0.2, -1.1] }, L: { p: [-0.025, -0.075, 0.035], r: [0.2, -0.5, 0.95] } },
-    fists: { R: { p: [0.12, -0.1, -0.36], r: [0.95, 0.22, -0.1] }, L: { p: [-0.12, -0.1, -0.36], r: [0.95, -0.22, 0.1] } },
-    grenade: { R: { p: [0.13, -0.12, -0.38], r: [0.8, 0.15, -0.4] }, L: { p: [-0.12, -0.17, -0.4], r: [0.9, -0.2, 0.3] } },
+    rifle: { R: { p: [0.035, -0.062, 0.09], r: [0.5, 0.3, 0], s: 0.8 }, L: { p: [-0.05, -0.03, -0.16], r: [0.35, -0.55, 0], s: 0.8 } },
+    pistol: { R: { p: [0.042, -0.05, 0.04], r: [0.3, 0.2, 0], s: 0.7 }, L: { p: [-0.015, -0.072, 0.015], r: [0.35, -0.3, 0], s: 0.7 } },
+    fists: { R: { p: [0.15, -0.135, -0.4], r: [0.8, 0.16, -0.05] }, L: { p: [-0.15, -0.135, -0.4], r: [0.8, -0.16, 0.05] } },
+    grenade: { R: { p: [0.13, -0.12, -0.38], r: [0.8, 0.15, -0.4], s: 0.8 }, L: { p: [-0.12, -0.17, -0.4], r: [0.9, -0.2, 0.3], s: 0.8 } },
   };
+
   /** Where the grenade sits in the throwing hand (hand space). */
-  const NADE_IN_HAND = { p: [0.0, 0.012, -0.06], r: [0.2, 0, 0] };
+  const NADE_IN_HAND = { p: [0.0, 0.06, -0.05], r: [0.2, 0, 0], k: 1 / 0.8 }; // (k undoes the 80% scale of the hand, the grenade keeps its size)
 
   // -------------------------------------------------------------------------
   VM.build = function (R) {
@@ -364,9 +352,10 @@
       const rig = HAND[id];
       const hands = {};
       for (const side of ['L', 'R']) {
-        const h = buildHand(VM.M, side === 'R' ? 1 : -1);
+        const h = buildFist(VM.M);
         h.position.set(rig[side].p[0], rig[side].p[1], rig[side].p[2]);
         h.rotation.set(rig[side].r[0], rig[side].r[1], rig[side].r[2]);
+        if (rig[side].s) h.scale.setScalar(rig[side].s);
         root.add(h);
         hands[side] = h;
       }
@@ -422,7 +411,8 @@
     if (!VM.M) return g;
     if (id === 'fists') {
       for (const side of [-1, 1]) {
-        const h = buildHand(VM.M, side);
+        const h = buildFist(VM.M);
+        h.scale.setScalar(0.8);
         h.position.set(side * 0.14, 0, 0);
         h.rotation.set(0.3, -side * 0.18, side * 0.1);
         g.add(h);
@@ -475,13 +465,35 @@
   };
 
   /** Cosmetic tracer start in camera space (hip: near the muzzle; ADS: near the sight line). */
+  /**
+   * Where a tracer starts, as an offset in the MAIN camera's space: the point of the weapon's real muzzle (SPEC.muzzle, followed through the
+   * model's pose, recoil-free hip pose, ADS and every animation) seen on screen through the view-model camera, then put back into the world
+   * through the main camera at the same depth. The view-model is drawn with its own fixed 60 degree camera while the game camera changes
+   * with the field-of-view setting and the aiming zoom, so a fixed offset (the old way) drifted away from the barrel whenever the model, the
+   * pose or the FOV changed: the bullet has to leave the muzzle you see.
+   */
   VM.tracerOffset = function (ads) {
-    const k = ads || 0;
-    VM._to = VM._to || [0, 0, 0];
-    VM._to[0] = 0.13 * (1 - k); // (aimed: the muzzle is on the line of the crosshair)
-    VM._to[1] = -0.12 * (1 - k) - 0.025 * k;
-    VM._to[2] = -0.55;
-    return VM._to;
+    const out = VM._to || (VM._to = [0, 0, 0]);
+    const R = VM.R,
+      m = VM.models[VM.shown];
+    if (!m || !R || !R.camera || !R.vmCamera || !m.spec.muzzle) {
+      const k = ads || 0; // (no model yet: the old fixed offset)
+      out[0] = 0.13 * (1 - k);
+      out[1] = -0.12 * (1 - k) - 0.025 * k;
+      out[2] = -0.55;
+      return out;
+    }
+    const v = VM._tv || (VM._tv = new THREE.Vector3());
+    m.root.updateMatrixWorld(true);
+    const mz = m.spec.muzzle;
+    v.set(mz[0], mz[1], mz[2]).applyMatrix4(m.g.matrixWorld); // view-model space = the view-model camera's space (it sits at the origin)
+    const depth = Math.max(0.2, -v.z);
+    v.project(R.vmCamera); // -> screen position (-1..1)
+    const t = Math.tan((R.camera.fov * Math.PI) / 360);
+    out[0] = v.x * t * R.camera.aspect * depth;
+    out[1] = v.y * t * depth;
+    out[2] = -depth;
+    return out;
   };
 
   const rad = (v) => v;
@@ -528,7 +540,7 @@
     hr.rotation.set(m.rig.R.r[0] + o.rh.rx, m.rig.R.r[1] + o.rh.ry, m.rig.R.r[2] + o.rh.rz);
     if (o.id === 'grenade') {
       m.g.visible = o.nade > 0.02;
-      m.g.scale.setScalar(Math.max(0.001, o.nade));
+      m.g.scale.setScalar(Math.max(0.001, o.nade) * NADE_IN_HAND.k);
       if (P.spoon) P.spoon.rotation.z = -0.95 * o.spoon;
       if (P.pin) {
         const b = P.pin.userData.base;

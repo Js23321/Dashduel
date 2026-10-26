@@ -18,10 +18,10 @@
 })();
 </script>
 <meta name="theme-color" content="#061526">
-<link rel="stylesheet" href="css/style.css?v=20261025m">
-<link rel="stylesheet" href="css/theme-arcade.css?v=20261025m">
-<link rel="stylesheet" href="css/lobby.css?v=20261025m">
-<link rel="stylesheet" href="css/rivals-ui.css?v=20261025m">
+<link rel="stylesheet" href="css/style.css?v=20261026f">
+<link rel="stylesheet" href="css/theme-arcade.css?v=20261026f">
+<link rel="stylesheet" href="css/lobby.css?v=20261026f">
+<link rel="stylesheet" href="css/rivals-ui.css?v=20261026f">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -122,8 +122,9 @@
         <div class="eyebrow">Play</div>
         <div class="menu-list">
           <button class="menu-item mode-card" data-mode="online" data-autofocus><span class="mi-n">01</span><span class="mi-t">Online 1v1</span><span class="mi-d">Real players. Queue up, first to 5 rounds</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="ffa"><span class="mi-n">&middot;</span><span class="mi-t">Free-for-all</span><span class="mi-d">Open online server. Join any time, everyone vs everyone</span><i class="ic mi-go" data-ic="arrow"></i></button>
           <button class="menu-item mode-card" data-mode="duel"><span class="mi-n">02</span><span class="mi-t">Duel</span><span class="mi-d">1v1 against an AI, first to win rounds</span><i class="ic mi-go" data-ic="arrow"></i></button>
-          <button class="menu-item mode-card" data-mode="arena"><span class="mi-n">03</span><span class="mi-t">Deathmatch</span><span class="mi-d">Free-for-all against several bots</span><i class="ic mi-go" data-ic="arrow"></i></button>
+          <button class="menu-item mode-card" data-mode="arena"><span class="mi-n">03</span><span class="mi-t">Deathmatch</span><span class="mi-d">Offline: against several bots, first to the kill limit</span><i class="ic mi-go" data-ic="arrow"></i></button>
           <button class="menu-item mode-card" data-mode="timetrial"><span class="mi-n">04</span><span class="mi-t">Time Trial</span><span class="mi-d">Race the checkpoints, beat your best</span><i class="ic mi-go" data-ic="arrow"></i></button>
           <button class="menu-item mode-card" data-mode="practice"><span class="mi-n">05</span><span class="mi-t">Practice</span><span class="mi-d">Free play with target dummies</span><i class="ic mi-go" data-ic="arrow"></i></button>
         </div>
@@ -276,7 +277,7 @@
         <div><h3>Bunny hop &amp; air strafe</h3><p>Jump the moment you land and you lose no speed (hold <kbd>Space</kbd> for auto-hop). In the air hold <kbd>A</kbd> or <kbd>D</kbd> and turn the mouse the same way to gain speed.</p></div>
         <div><h3>Wall run &amp; wall jump</h3><p>Jump beside a teal striped wall while holding forward to run along it. Press <kbd>Space</kbd> on any wall to push off towards where you look.</p></div>
         <div><h3>Pads &amp; ramps</h3><p>Launch pads fling you across the arena. Run up a ramp and jump off its end to carry the climb into the air.</p></div>
-        <div><h3>Weapons <small>keys 1–4 or mouse wheel</small></h3><p><kbd>1</kbd> Assault Rifle (full-auto) · <kbd>2</kbd> Handgun (semi-auto) · <kbd>3</kbd> Fists · <kbd>4</kbd> Grenade. <kbd>F</kbd> swaps to your previous weapon. Right mouse aims down sights with the rifle and handgun.</p></div>
+        <div><h3>Weapons <small>keys 1–4 or mouse wheel</small></h3><p><kbd>1</kbd> Assault Rifle (full-auto) · <kbd>2</kbd> Handgun (semi-auto) · <kbd>3</kbd> Fists · <kbd>4</kbd> Grenade. <kbd>F</kbd> is a <b>quick melee</b>: the fists come out, throw one punch and your weapon comes back (a jump in that time is a double jump). <kbd>G</kbd> is a <b>quick grenade</b>: throw one at once, then your weapon is back. Right mouse aims down sights with the rifle and handgun.</p></div>
         <div><h3>Fists &amp; double jump</h3><p>Equip the Fists and press <kbd>Space</kbd> once more in the air for a second jump. It refreshes when you touch the ground and works only while Fists are in your hands.</p></div>
         <div><h3>Grenade</h3><p>Hold a mouse button to pull the pin and aim: a line shows the path and a circle shows where it lands. Release to throw. Keep holding: after 1 s the circle starts sliding towards you, slowly and then faster, and 3 s after the pin came out it touches you and explodes: a free grenade boost. 75 damage to enemies inside the 6 m blast (cover reduces it), never to you. One grenade, 30 s cooldown. <kbd>R</kbd> cancels.</p></div>
         <div><h3>Zero recoil, zero spread</h3><p>Guns are hitscan: the instant you click, a perfectly straight ray goes through the crosshair. No recoil, no camera shake, no bullet drop. Dodging and positioning win fights.</p></div>
@@ -329,44 +330,44 @@
 <div id="map-loading" class="hidden"><span id="map-loading-text">Loading map&hellip;</span></div>
 
 <script src="vendor/three.min.js"></script>
-<script src="js/config.js?v=20261025m"></script>
-<script src="js/util.js?v=20261025m"></script>
-<script src="js/weapondata.js?v=20261025m"></script>
-<script src="js/settings.js?v=20261025m"></script>
-<script src="js/menulayout.js?v=20261025m"></script>
-<script src="js/stats.js?v=20261025m"></script>
-<script src="js/mesh-testarena.js?v=20261025m"></script>
-<script src="js/mesh-lobby.js?v=20261025m"></script>
-<script src="js/mapdata-testarena.js?v=20261025m"></script>
-<script src="js/mapdata-bridge.js?v=20261025m"></script>
-<script src="js/mapdata-crossroads.js?v=20261025m"></script>
-<script src="js/mapdata-docks.js?v=20261025m"></script>
-<script src="js/mapdata-station.js?v=20261025m"></script>
-<script src="js/mapdata-backrooms.js?v=20261025m"></script>
-<script src="js/maps.js?v=20261025m"></script>
-<script src="js/collision.js?v=20261025m"></script>
-<script src="js/grensim.js?v=20261025m"></script>
-<script src="js/player.js?v=20261025m"></script>
-<script src="js/netproto.js?v=20261025m"></script>
-<script src="js/input.js?v=20261025m"></script>
-<script src="js/audio.js?v=20261025m"></script>
-<script src="js/models-weapons.js?v=20261025m"></script>
-<script src="js/vmanim.js?v=20261025m"></script>
-<script src="js/viewmodel.js?v=20261025m"></script>
-<script src="js/fx.js?v=20261025m"></script>
-<script src="js/render.js?v=20261025m"></script>
-<script src="js/post.js?v=20261025m"></script>
-<script src="js/icons.js?v=20261025m"></script>
-<script src="js/hud.js?v=20261025m"></script>
-<script src="js/weapons.js?v=20261025m"></script>
-<script src="js/grenades.js?v=20261025m"></script>
-<script src="js/bots.js?v=20261025m"></script>
-<script src="js/modes.js?v=20261025m"></script>
-<script src="js/menubg.js?v=20261025m"></script>
-<script src="js/lobby.js?v=20261025m"></script>
-<script src="js/netclient.js?v=20261025m"></script>
-<script src="js/online.js?v=20261025m"></script>
-<script src="js/ui.js?v=20261025m"></script>
-<script src="js/main.js?v=20261025m"></script>
+<script src="js/config.js?v=20261026f"></script>
+<script src="js/util.js?v=20261026f"></script>
+<script src="js/weapondata.js?v=20261026f"></script>
+<script src="js/settings.js?v=20261026f"></script>
+<script src="js/menulayout.js?v=20261026f"></script>
+<script src="js/stats.js?v=20261026f"></script>
+<script src="js/mesh-testarena.js?v=20261026f"></script>
+<script src="js/mesh-lobby.js?v=20261026f"></script>
+<script src="js/mapdata-testarena.js?v=20261026f"></script>
+<script src="js/mapdata-bridge.js?v=20261026f"></script>
+<script src="js/mapdata-crossroads.js?v=20261026f"></script>
+<script src="js/mapdata-docks.js?v=20261026f"></script>
+<script src="js/mapdata-station.js?v=20261026f"></script>
+<script src="js/mapdata-backrooms.js?v=20261026f"></script>
+<script src="js/maps.js?v=20261026f"></script>
+<script src="js/collision.js?v=20261026f"></script>
+<script src="js/grensim.js?v=20261026f"></script>
+<script src="js/player.js?v=20261026f"></script>
+<script src="js/netproto.js?v=20261026f"></script>
+<script src="js/input.js?v=20261026f"></script>
+<script src="js/audio.js?v=20261026f"></script>
+<script src="js/models-weapons.js?v=20261026f"></script>
+<script src="js/vmanim.js?v=20261026f"></script>
+<script src="js/viewmodel.js?v=20261026f"></script>
+<script src="js/fx.js?v=20261026f"></script>
+<script src="js/render.js?v=20261026f"></script>
+<script src="js/post.js?v=20261026f"></script>
+<script src="js/icons.js?v=20261026f"></script>
+<script src="js/hud.js?v=20261026f"></script>
+<script src="js/weapons.js?v=20261026f"></script>
+<script src="js/grenades.js?v=20261026f"></script>
+<script src="js/bots.js?v=20261026f"></script>
+<script src="js/modes.js?v=20261026f"></script>
+<script src="js/menubg.js?v=20261026f"></script>
+<script src="js/lobby.js?v=20261026f"></script>
+<script src="js/netclient.js?v=20261026f"></script>
+<script src="js/online.js?v=20261026f"></script>
+<script src="js/ui.js?v=20261026f"></script>
+<script src="js/main.js?v=20261026f"></script>
 </body>
 </html>

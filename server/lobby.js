@@ -11,6 +11,7 @@ const schema = require('./schema');
 const ac = require('./anticheat');
 const { Sessions } = require('./sessions');
 const { Room } = require('./room');
+const { FfaRoom } = require('./ffa');
 const { RV } = require('./shared');
 
 const now = () => performance.now();
@@ -107,6 +108,11 @@ class Lobby {
     this.clients = new Set();
     this.queue = [];
     this.rooms = new Set();
+    this.ffa = new Map(); // map id -> its always-running free-for-all room
+    if (CFG.FFA.ENABLED) {
+      const maps = CFG.FFA.MAPS.length ? CFG.FFA.MAPS : CFG.MAPS;
+      for (const id of maps) if (RV.maps[id] && CFG.MAPS.includes(id)) this.ffa.set(id, new FfaRoom(0, id, this));
+    }
     this.sessions = new Sessions();
     this.nextRoom = 1;
     this.perIp = new Map();
@@ -174,7 +180,9 @@ class Lobby {
   }
 
   info() {
-    return { online: this.clients.size, queued: this.queue.length, rooms: this.rooms.size };
+    const ffa = {};
+    for (const [id, r] of this.ffa) ffa[id] = r.count;
+    return { online: this.clients.size, queued: this.queue.length, rooms: this.rooms.size, ffa, ffaCap: CFG.FFA.MAX_PLAYERS };
   }
 
   onMessage(c, m) {
@@ -237,6 +245,35 @@ class Lobby {
     }
     if (c.state === 'new') return;
     switch (m.t) {
+      case 'ffa': {
+        const s = c.session;
+        const wait = ac.lockedFor(s.id, c.ip);
+        if (wait) {
+          c.send({ t: 'err', code: 'locked', msg: 'You are locked out for ' + wait + ' more seconds.' });
+          return;
+        }
+        const room = this.ffa.get(m.map);
+        if (!room) {
+          c.send({ t: 'err', code: 'nomap', msg: 'There is no free-for-all room on that map.' });
+          return;
+        }
+        if (s.room) {
+          if (s.room === room) {
+            room.attach(s, c); // (the same room: just take it up again)
+            return;
+          }
+          if (s.room.phase !== 'over' && !(s.room instanceof FfaRoom)) {
+            s.room.attach(s, c); // a running 1v1 match is resumed, never abandoned by joining something else
+            return;
+          }
+          s.room.onLeave(c, 'left'); // a finished match, or another free-for-all room: leave it first
+        }
+        const qi = this.queue.indexOf(c);
+        if (qi >= 0) this.queue.splice(qi, 1);
+        c.state = 'idle';
+        if (!room.join(c)) c.send({ t: 'err', code: 'full', msg: 'This room is full (' + room.count + ' / ' + CFG.FFA.MAX_PLAYERS + '). Pick another map.' });
+        return;
+      }
       case 'queue': {
         const s = c.session;
         const wait = ac.lockedFor(s.id, c.ip);
@@ -244,6 +281,7 @@ class Lobby {
           c.send({ t: 'err', code: 'locked', msg: 'Matchmaking is locked for ' + wait + ' more seconds.' });
           return;
         }
+        if (s.room instanceof FfaRoom) s.room.onLeave(c, 'left'); // (from a free-for-all room to a 1v1 queue)
         if (s.room) {
           // a running match is resumed, never duplicated; a finished one is left to make room for a new queue entry
           if (s.room.phase === 'over') s.room.onLeave(c, 'left');
@@ -316,10 +354,15 @@ class Lobby {
     const t = now();
     const dt = Math.min(0.1, (t - this.lastTick) / 1000);
     this.lastTick = t;
-    for (const r of this.rooms) {
+    for (const r of [...this.rooms, ...this.ffa.values()]) {
       try {
         r.tick(t, dt);
       } catch (e) {
+        if (r instanceof FfaRoom) {
+          // an always-running room cannot be closed: log it, tell nobody the internals, and keep ticking (the players stay)
+          log.warn('ffa_error', { room: r.id, msg: String(e && e.message).slice(0, 120), at: String((e && e.stack) || '').split(String.fromCharCode(10))[1] });
+          continue;
+        }
         // one broken room must never take the server (or the other rooms) down; clients get no internals
         log.warn('room_error', { room: r.id, msg: String(e && e.message).slice(0, 120) });
         r.abort('server error');

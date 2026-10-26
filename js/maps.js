@@ -497,6 +497,8 @@
     if (RV.mapOrder.indexOf(m.id) < 0) RV.mapOrder.splice(last ? RV.mapOrder.length : RV.mapOrder.indexOf('yard') >= 0 ? RV.mapOrder.indexOf('yard') : RV.mapOrder.length, 0, m.id);
     // maps that support the 1v1 duel are also online 1v1 maps
     if (m.modes.indexOf('duel') >= 0 && m.modes.indexOf('online') < 0) m.modes.push('online');
+    // ... and every one of them has an always-running free-for-all room on the server
+    if (m.modes.indexOf('duel') >= 0 && m.modes.indexOf('ffa') < 0) m.modes.push('ffa');
   };
 
   RV.maps = {};
@@ -508,6 +510,8 @@
       size: 'Compact',
       sky: SKY.arena,
       killY: -30,
+      play: [-14, -22, 14, 22, 14], // the invisible fence: the inner faces of the outer walls (and a ceiling 4 m above them)
+      barrier: { y0: 10, y1: 14, color: 0x5fd4ff }, // ... drawn as a faint force field above the wall tops
       navStep: 1.5, // a tight map: the bots walking graph needs a fine grid
       clouds: 6,
       meshColor: 0xa9aeb8,
@@ -520,6 +524,7 @@
       size: 'Medium',
       sky: SKY.city,
       killY: -30,
+      play: [-40, -30, 40, 30, 18],
       navStep: 2.0,
       clouds: 8,
       swatch: [0x4b5160, 0xffc533, 0x9aa2ae, 0xe8d8c4],
@@ -531,6 +536,7 @@
       size: 'Large',
       sky: SKY.field,
       killY: -30,
+      play: [-46, -46, 46, 46, 16],
       navStep: 2.5,
       clouds: 12,
       swatch: [0x7fcf6a, 0x555b66, 0xb9b3a6, 0xc7553d],
@@ -542,6 +548,7 @@
       size: 'Large',
       sky: SKY.harbour,
       killY: -5.5,
+      play: [-46, -46, 46, 29.8, 16],
       water: { y: -2.4, color: 0x2a86c8, opacity: 0.88 },
       navStep: 2.0,
       clouds: 9,
@@ -554,6 +561,7 @@
       size: 'Large',
       sky: SKY.western,
       killY: -30,
+      play: [-38, -30, 38, 30, 16],
       navStep: 2.0,
       clouds: 6,
       swatch: [0xb23a32, 0x2f5d8a, 0xc89a63, 0xd9b77e],
@@ -565,6 +573,7 @@
       size: 'Medium',
       sky: SKY.office,
       killY: -30,
+      play: [-27.6, -27.6, 27.6, 27.6, 6],
       navStep: 1.6,
       clouds: 0,
       swatch: [0xd6c46a, 0x8e2b2b, 0x9fd8e0, 0x9c8a46],

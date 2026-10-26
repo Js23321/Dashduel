@@ -50,6 +50,93 @@ for (const id of POOL) {
   });
 }
 
+for (const id of POOL) {
+  test('map ' + id + ': an invisible fence on the outer walls - spawns are inside it, and nothing can leave however fast it is launched', () => {
+    const map = RV.maps[id];
+    const world = S.worldFor(id);
+    assert.ok(world.play, 'the map has a play box');
+    for (const sp of map.spawns) assert.ok(world.inPlay(sp.x, sp.z, 0.5), 'spawn inside the fence: ' + sp.x + ',' + sp.z);
+    for (const d of map.dummies || []) assert.ok(world.inPlay(d.x, d.z, 0.5), 'practice dummy inside the fence');
+    // random players with extreme launches (far beyond what a grenade gives): none may end up outside the box
+    let seed = 99;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const pl = new RV.Player(world);
+    for (let r = 0; r < 30; r++) {
+      const sp = map.spawns[Math.floor(rnd() * map.spawns.length)];
+      pl.reset(sp.x, sp.y, sp.z, rnd() * 6.28 - 3.14, 0);
+      pl.djEnabled = r % 2 === 0;
+      const cmd = { fwd: 1, side: 0, jumpDown: false, jumpPressed: false, crouch: false, sprint: true };
+      for (let i = 0; i < 12 * 120; i++) {
+        if (i % 90 === 0) {
+          const a = rnd() * 6.28;
+          pl.b.vx += Math.cos(a) * (10 + rnd() * 40);
+          pl.b.vz += Math.sin(a) * (10 + rnd() * 40);
+          pl.b.vy += 3 + rnd() * 12;
+          pl.yaw += (rnd() - 0.5) * 3;
+        }
+        cmd.jumpPressed = rnd() < 0.05;
+        cmd.jumpDown = cmd.jumpPressed;
+        pl.step(RV.PHYS.STEP, cmd);
+        const b = pl.b;
+        assert.ok(world.inPlay(b.x, b.z, b.hw - 1e-6), id + ': inside the fence at (' + b.x.toFixed(2) + ',' + b.z.toFixed(2) + ') run ' + r + ' step ' + i);
+        assert.ok(b.y > world.killY + 4 || map.water, id + ': did not fall out of the map');
+      }
+    }
+  });
+}
+
+test('no push-out teleports: a body that brushes the side of a solid is not thrown to its far end or onto its top (Arena catwalk edge)', () => {
+  const world = S.worldFor('testarena');
+  const pl = new RV.Player(world);
+  pl.reset(4.27, 1.83, 1.847, 0, 0); // under the catwalk (z -1.5..1.5, y 3.6..4.2), 3 mm inside its edge, head 3 cm into its underside
+  const b = pl.b;
+  b.h = 1.8;
+  world.move(b, -0.012, -0.012, -0.0065);
+  assert.ok(Math.hypot(b.x - 4.27, b.z - 1.847) < 0.1, 'moved sideways by ' + Math.hypot(b.x - 4.27, b.z - 1.847).toFixed(2) + ' m (was a 4 m + 20 m throw)');
+  assert.ok(b.y < 2.5, 'not lifted onto the catwalk (y ' + b.y.toFixed(2) + ')');
+});
+
+for (const id of POOL) {
+  test('map ' + id + ': random play (hops, slides, wall runs, grenade boosts) never teleports the body or leaves it inside a solid', () => {
+    const map = RV.maps[id];
+    const world = S.worldFor(id);
+    const GW = RV.WEAPON_BY_ID.grenade;
+    let seed = 31337;
+    const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const rr = (a, b) => a + (b - a) * rnd();
+    const D = RV.PHYS.STEP;
+    for (let r = 0; r < 24; r++) {
+      const sp = map.spawns[Math.floor(rnd() * map.spawns.length)];
+      const pl = new RV.Player(world);
+      pl.reset(sp.x, sp.y, sp.z, rr(-3, 3), 0);
+      pl.djEnabled = r % 2 === 0;
+      const cmd = { fwd: 1, side: 0, jumpDown: false, jumpPressed: false, crouch: false, sprint: true };
+      let turn = 0;
+      for (let i = 0; i < 20 * 120; i++) {
+        if (i % 40 === 0) {
+          turn = rr(-3, 3);
+          cmd.side = Math.floor(rr(-1.5, 1.5));
+        }
+        pl.yaw += turn * D;
+        cmd.jumpPressed = rnd() < 0.04;
+        cmd.jumpDown = cmd.jumpPressed || rnd() < 0.3;
+        cmd.crouch = i % 50 < 20 && rnd() < 0.15;
+        if (i % 400 === 399) RV.grensim.boost(world, pl, GW, pl.b.x + rr(-2, 2), pl.b.y - 0.1, pl.b.z + rr(-2, 2));
+        const b = pl.b,
+          x0 = b.x,
+          y0 = b.y,
+          z0 = b.z,
+          v = Math.hypot(b.vx, b.vy, b.vz);
+        pl.step(D, cmd);
+        const d = Math.hypot(b.x - x0, b.y - y0, b.z - z0);
+        assert.ok(d <= Math.max(0.6, (v + 30) * D + 0.02), id + ': a step moved the body ' + d.toFixed(2) + ' m (run ' + r + ', step ' + i + ', from ' + [x0, y0, z0].map((n) => n.toFixed(2)) + ')');
+        assert.ok(!world.overlapsAny(b.x, b.y + 0.001, b.z, b.hw - 0.02, b.h - 0.02), id + ': inside a solid at ' + [b.x, b.y, b.z].map((n) => n.toFixed(2)));
+        if (b.y < map.killY + 4) break; // fell out (the Docks' water): that is the round ending, not a teleport
+      }
+    }
+  });
+}
+
 test('Arena: both ends are mirror images (every spawn has its point-mirrored partner, and the solids are 180-degree symmetric)', () => {
   const sp = RV.maps.testarena.spawns;
   assert.ok(sp.length >= 6 && sp.length % 2 === 0, 'an even number of spawns');

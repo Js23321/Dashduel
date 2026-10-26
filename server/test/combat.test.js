@@ -255,7 +255,7 @@ test('grenade: server-simulated flight, boom after the fuse, 75 to the enemy, no
   const boomA = await m.a.wait('boom', null, 4000),
     boomB = await m.b.wait('boom', null, 4000);
   const fuse = Date.now() - t0;
-  assert.ok(fuse > 1500 && fuse < 2500, 'fuse is about 2 s, was ' + fuse);
+  assert.ok(fuse > RV.WEAPON_BY_ID.grenade.fuse * 1000 - 250 && fuse < RV.WEAPON_BY_ID.grenade.fuse * 1000 + 500, 'fuse is about ' + RV.WEAPON_BY_ID.grenade.fuse + ' s, was ' + fuse);
   assert.strictEqual(boomA.own, true);
   assert.strictEqual(boomB.own, false);
   const hurt = await m.b.wait('hurt');

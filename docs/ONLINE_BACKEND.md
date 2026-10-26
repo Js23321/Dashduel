@@ -80,14 +80,29 @@ are rejected and counted):
 | `act` | `rn, q, a, s` | A request: `fire punch reload nadepin nadecancel nade nadeself`, made at input step `q`, with weapon slot `s`. **No direction, no timestamp, no damage** |
 | `ping` / `spong` | `ts` | Latency |
 
-Server → client: `welcome` (session id, token for a new session), `queued`, `match`, `resume`, `round`, `live`, `snap`
+| `ffa` | `map` | Join the always-running free-for-all room of a map (protocol 4) |
+
+Server → client: `welcome` (session id, token for a new session, and `ffa: {map: players}` / `ffaCap`), `queued`, `match`, `resume`, `round`, `live`, `snap`
 (30 Hz), `hurt`, `hit`, `fx`, `nade`, `boom`, `roundEnd`, `matchEnd`, `fix`, `opp` (away/back), `rematch`, `warn`, `err`,
-`sping`, `pong`.
+`sping`, `pong`. The free-for-all adds `ffa` (you are in the room of this map, your slot, the list; the client loads the map and answers `ready`), `fspawn` (you are in the world:
+life number `rn`, full movement state, spawn index, ammo, protection), `fsnap` (30 Hz: your health / ammo / acknowledged input step and `os`, the array of the players you can see:
+`[slot, x, y, z, yaw, pitch, speed, grounded, mode, weapon, protected]`), `fboard` (the room's list `[slot, name, kills, deaths, alive, rtt]`, on change and every 2 s), `fkf` (an
+elimination: killer slot or -1, victim slot, weapon, headshot), `fwin` (somebody reached the kill limit). `hurt` carries `by` (the attacker's slot) and `rs` (the respawn time), `hit` carries `v` (the victim's slot).
 
 ### Connection status in the game
 The in-game top-left line shows `Connected · <ms> · <n> online` (or `Reconnecting…`); the queue screen shows connecting /
 searching / error states; the results screen offers **Rematch**; *Settings → Network* shows the server in use and has a
 **Test connection** button (a separate short socket, so it never disturbs a running match).
+
+### The free-for-all room (`server/ffa.js`)
+One `FfaRoom` per map is created when the server starts and lives as long as it does (`FFA_MAPS`, default every map). It is not a variation of the 1v1 `Room`: it borrows the 1v1
+room's methods that do not care how many players there are (`onInput`, `onAct`, `advance`, `stepOne`, corrections, `lagHit`, `visible`, ...), so the movement stepping, the speed-hack limits, view-turn limits,
+fire-rate / reload rules, lag compensation and line-of-sight culling are **the same code**, and adds only what differs: who can hit whom (everyone; the nearest player along the shot), what a death means (a respawn
+after `FFA_RESPAWN_S`, a point for the killer, the kill feed), the per-life number (`rn` = the player's life, so input of an ended life is ignored exactly like input of an ended round), 2.5 s spawn protection, the
+kill limit (`FFA_KILL_LIMIT`: everybody is told, scores reset, nobody is removed), the idle limit (`FFA_IDLE_S`, no movement / aim / action), the load timeout (`LOAD_TIMEOUT_S`, a joined player that never says `ready`)
+and the capacity (`FFA_MAX_PLAYERS`). A player is in the world only after `ready` (while the map loads they can neither be shot nor see anything). Nothing is kept for a dropped connection: the player is removed at
+once and the client simply joins again (a fresh life). A tick error in this room is logged and the room keeps running (it cannot be closed). Grenades and shots are sent only to players within 90 m (a shooter that
+cannot be seen is a sound without positions, as in 1v1).
 
 ---
 
@@ -128,6 +143,11 @@ searching / error states; the results screen offers **Rematch**; *Settings → N
    worked off at up to 1.5× (so a lag spike does not leave you late for the rest of the round), but a client may never
    be **ahead** of the round clock by more than 3 s of input in total (`received ≤ clock × 120 + 360`). A client that
    sends input faster than real time (speed hack / time hack) hits that limit and is flagged `input_overflow`.
+   The credit a player earns is capped at 45 steps (a stall on the *client's* side must not become a burst of movement), **except** while
+   input is already waiting: then the time that passed was the *server's* (a GC pause, a throttled or busy host: the event loop did not
+   run) and it is paid back instead of thrown away. Without that, every server stall added to a permanent backlog until the 720-step queue
+   overflowed and an honest client was kicked (`input_overflow`, then `seq_gap` for the batches the server had refused). A full queue with
+   the client still inside the round clock now makes the server work the backlog off first; only a queue that is *still* full is flooding.
 
 ### What the movement checks understand
 Because the server runs the real physics, **everything legitimate is automatically legitimate**: slides, slide-jumps,
@@ -342,6 +362,8 @@ browser) → `SERVER_URL` → `SAME_ORIGIN_SERVER` (the host that served the pag
 | `MAX_CONNECTIONS` / `MAX_PER_IP` | `400` / `6` | Connection limits |
 | `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | Logging |
 | `RECONNECT_GRACE_S`, `REMATCH_WINDOW_S`, `AC_*`, `LAG_MAX_REWIND_MS` | see `.env.example` | Thresholds |
+| `FFA` / `FFA_MAPS` / `FFA_MAX_PLAYERS` | on / every map / `12` | The always-running free-for-all rooms (`FFA=0` switches them off) |
+| `FFA_RESPAWN_S` / `FFA_SPAWN_PROTECT_S` / `FFA_KILL_LIMIT` / `FFA_IDLE_S` | `2.5` / `2.5` / `25` / `120` | Free-for-all rules |
 
 ---
 
