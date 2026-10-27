@@ -21,6 +21,9 @@ COLOURS = {
     # RIVALS look (flat, chunky, saturated)
     'orange': (0.80, 0.30, 0.03), 'orangeDark': (0.56, 0.17, 0.01), 'black': (0.02, 0.022, 0.028), 'green': (0.03, 0.27, 0.05),
     'greenDark': (0.015, 0.14, 0.03), 'navy': (0.05, 0.065, 0.15), 'skinDark': (0.6, 0.38, 0.27),
+    # the RIVALS rifle and handgun colours (flat, from their mesh exports)
+    'rvDark': (0.0046, 0.0084, 0.0278), 'rvOrange': (0.77, 0.33, 0.049), 'rvOrangeDark': (0.67, 0.18, 0.04), 'rvGrey': (0.094, 0.096, 0.094),
+    'rvBlack': (0.0026, 0.0026, 0.0026), 'rvSlide': (0.0072, 0.0189, 0.0316),
 }
 
 

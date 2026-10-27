@@ -56,7 +56,8 @@
     // right, big, and its muzzle points in towards the crosshair (hipYaw / hipPitch, blended out while aiming), the muzzle ends up
     // just right of and below the crosshair so the centre of the screen stays clear
     rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1265, -0.36], scale: 0.6, hip: [0.12, -0.15, -0.335], hipYaw: 0, hipPitch: 0, sight: [0, 0.1265, 0.153], boltTravel: 0.075, kick: { z: 2.0, rx: 0, y: 0, side: 0, lift: 0.6, lag: 0.04 }, er: 0.3, erCentre: 0.22, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
-    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.118, -0.345], hipYaw: 0, hipPitch: 0, sight: [0, 0.082, 0.095], er: 0.23, erCentre: 0.19, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
+    // (the handgun is the Roblox pistol from _models/handgun: a U-notch rear sight with the front wedge standing in it; the crosshair rests on the wedge)
+    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.0835, -0.166], scale: 0.64, hip: [0.075, -0.118, -0.345], hipYaw: 0, hipPitch: 0, sight: [0, 0.0835, 0.087], slideTravel: 0.032, er: 0.23, erCentre: 0.19, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.068, -0.021], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
     fists: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'punch', reload: 'none', sprintPose: 0.6, cas: null, noAds: true },
     grenade: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'throw', reload: 'none', sprintPose: 0.7, cas: null, noAds: true },
   };
@@ -317,8 +318,9 @@
     constructor() {
       this.t = 0;
       this.bobPhase = 0;
-      this.w = { move: 0, sprint: 0, slide: 0, air: 0, wall: 0 };
+      this.w = { move: 0, sprint: 0, slide: 0, air: 0, wall: 0, sway: 0 }; // (sway: how far you are strafing, -1 left .. 1 right, for the aimed gun)
       this.sp = { y: 0, vy: 0, r: 0, vr: 0 }; // landing / take-off spring
+      this.ab = { y: 0, vy: 0 }; // the aimed gun's landing bounce (underdamped: it bounces a couple of times)
       this.vyF = 0;
       this.fireT = 99; // seconds since the last shot
       this.rec = { z: 0, zV: 0, y: 0, yV: 0, rx: 0, rxV: 0, ry: 0, ryV: 0, rz: 0, rzV: 0 }; // the shake of the whole weapon after a shot (underdamped springs)
@@ -396,6 +398,7 @@
       const k = clamp01((impact - 3) / 18);
       this.sp.vy -= 0.9 + 2.4 * k;
       this.sp.vr -= 0.5 + 1.2 * k;
+      this.ab.vy -= 0.1 + 0.2 * k;
     }
 
     onJump() {
@@ -562,6 +565,22 @@
       y += sp.y * 0.05 * sk;
       rx += sp.r * 0.06 * sk;
 
+      // aimed-gun sway (every gun with sights): strafing angles the gun the way you move (right: turned and rolled to the right, left: to the left),
+      // a jump lifts it and the fall lets it sink, and a landing bounces it a little. Only while aiming, and not while sliding or wall running:
+      // there an aimed gun stays still (the slide and wall-run poses above fade out as you aim for the same reason)
+      const ab = this.ab;
+      for (let i = 0; i < 4; i++) {
+        const h = dt / 4;
+        ab.vy += (-400 * ab.y - 8 * ab.vy) * h;
+        ab.y += ab.vy * h;
+      }
+      spring(w, 'sway', Math.max(-1, Math.min(1, (st.strafe || 0) / 8.5)), 8, dt);
+      const sw = a * (1 - smooth(w.slide)) * (1 - smooth(w.wall));
+      ry += -0.04 * w.sway * sw;
+      rz += -0.05 * w.sway * sw;
+      y += (Math.max(-0.016, Math.min(0.016, vy * 0.0018)) + ab.y) * sw;
+      rx += ab.y * 1.2 * sw;
+
       // reload (guns)
       const rl = reloadPose(shownSpec.reload, reloading && shown === st.id ? st.reload : -1, this._rl);
       x += rl.rdx;
@@ -661,7 +680,7 @@
         this.casingAt = -1;
       }
       o.boltZ = boltZ * ((shownSpec.boltTravel || 0.055) / 0.055); // (the bolt part slides this far back on a shot; the rifle top strip a little less than a pistol slide)
-      o.slideZ = slideZ;
+      o.slideZ = slideZ * ((shownSpec.slideTravel || 0.045) / 0.045); // (a short-slide pistol does not push its slide out of the back of the frame)
       o.magY = rl.magY;
       o.magZ = rl.magZ;
       o.magRx = rl.magRx;

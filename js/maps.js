@@ -235,6 +235,8 @@
     western: { hill: 0xc8925a, top: 0x4c9aff, bottom: 0xffe4b8, fog: 0xf2dfc0, fogNear: 110, fogFar: 470, hemi: [0xfff4e0, 0xd2b48a, 2.15], sun: [0xfff0d0, 1.75] },
     // enclosed: no sun, hills or clouds are drawn; a short yellow haze and a strong ambient light keep every corridor readable
     office: { indoor: true, hill: 0xb7a54e, top: 0xe8dca0, bottom: 0xe8dca0, fog: 0xd8c874, fogNear: 28, fogFar: 95, hemi: [0xfff6c8, 0xd9c577, 2.7], sun: [0xfff1b0, 0.55] },
+    // night: a dark blue sky, a cold moonlight and a strong enough ambient light that the slate floor and the grey cover stay readable
+    night: { hill: 0x141c2c, top: 0x05070f, bottom: 0x1a2438, fog: 0x0c1322, fogNear: 45, fogFar: 220, hemi: [0xb9c8ff, 0x3a4766, 1.9], sun: [0xb4c2ff, 0.9] },
   };
 
   // ===========================================================================
@@ -579,6 +581,20 @@
       swatch: [0xd6c46a, 0x8e2b2b, 0x9fd8e0, 0x9c8a46],
     })
   );
+  RV.registerMap(
+    fromData('darkarena', 'Dark Arena', 'arena', {
+      desc: 'A dark walled arena under a night sky: slate-blue floor and cracked walls, grey cover in the middle (a table on legs, turned slabs and windowed arches), a ramp up to a high perch in each end corner. A tall wall hides each spawn.',
+      size: 'Compact',
+      sky: SKY.night,
+      killY: -30,
+      play: [-13.5, -19.5, 13.5, 19.5, 13], // the invisible fence: the inner faces of the outer walls (and a ceiling 4 m above them)
+      barrier: { y0: 9, y1: 13, color: 0x5f8fff }, // ... drawn as a faint force field above the wall tops
+      navStep: 1.5,
+      clouds: 0,
+      meshColor: 0x35516b,
+      swatch: [0x1f3447, 0x2a4660, 0x686b6f, 0x6e5848],
+    })
+  );
   // the practice field and the time trial course are not part of the duel pool
   RV.registerMap(yard(), true);
   RV.registerMap(gauntlet(), true);
@@ -603,7 +619,12 @@
           const el = document.createElement('script');
           el.src = 'js/mesh-' + m.mesh + '.js' + stamp();
           el.onload = () => res(!!(RV.meshes && RV.meshes[m.mesh]));
-          el.onerror = () => res(false);
+          el.onerror = () => {
+            // (a dropped connection must not cost this map its picture for the rest of the visit: the next request tries again)
+            delete loads[m.mesh];
+            el.remove();
+            res(false);
+          };
           document.head.appendChild(el);
         });
       }

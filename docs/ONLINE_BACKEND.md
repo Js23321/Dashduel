@@ -113,7 +113,7 @@ cannot be seen is a sound without positions, as in 1v1).
   HMAC-SHA256 using `SESSION_SECRET` (random per start if unset). A token is verified in constant time. A valid token
   on a new connection **replaces** the old connection of the same session (a session is never in two places).
 * **Queue:** `queue` puts the connection in a FIFO list; two live, distinct sessions are paired and first **vote on the map**
-  (protocol 6: `vote` with 3 maps picked at random from the pool, 12 s, `vote` / `votes` / `voteend` / `votecancel`, see `Lobby.startVote`; `MAP_VOTE=0` switches it off and the server
+  (protocol 6, 7 adds the Dark Arena: `vote` with 3 maps picked at random from the pool, 12 s, `vote` / `votes` / `voteend` / `votecancel`, see `Lobby.startVote`; `MAP_VOTE=0` switches it off and the server
   picks a random map again), then become a `Room` on the winning map (most votes; a tie or no votes at all is decided by chance; if one player leaves the other goes back to the front of the queue). A session already inside a running match that sends `queue` is *re-attached* to that
   match instead of being queued twice.
 * **Isolation:** each room has its own players, history, grenades and timers; nothing is shared. A bug or exception in
@@ -226,8 +226,10 @@ server (see section 11).
 ### Logging and inspection
 * **Structured JSON logs** (one object per line; `LOG_FORMAT=text` for humans): `match_start`, `match_end` (+telemetry),
   `violation` (rule, weight, score, session id, room, small details), `warn`, `kick`, `player_away/back/gone`,
-  `rematch_*`, `session_new/resume`, `room_error`. Fields named token/secret/password/authorization are dropped before
-  writing; no IP addresses or tokens are logged.
+  `rematch_*`, `session_new/resume`, `room_error`, `handler_error`. Fields named token/secret/password/authorization are dropped before
+  writing; no IP addresses or tokens are logged. A bug in the game code that one client's message (or one pairing) happens to reach
+  costs that message only: `handler_error` is logged and counted (`totals.errors` in `/health`), the connection stays and the other
+  matches never notice. A room that throws while ticking is closed (`room_error`); a free-for-all room keeps running.
 * **Dev-only endpoints**, off unless `DEBUG_ENDPOINTS=1`: `GET /debug/anticheat` (rule table with counters, active
   scores, recent security events, thresholds) and `GET /debug/rooms` (room phase, scores, stats per room). They need
   `Authorization: Bearer <ADMIN_TOKEN>` (constant-time compare) or, with no token configured, a loopback client.
@@ -309,18 +311,22 @@ PowerShell: `$env:SERVE_STATIC='1'; node server.js`.
 ### Automated tests
 ```bash
 cd server
-npm test                                # 81 tests, serial, ~5 min (timing-based: close other heavy programs while it runs)
+npm test                                # 150 tests, serial, ~6 min (timing-based: close other heavy programs while it runs)
 ```
 | File | Tests | Covers |
 |---|---|---|
 | `lobby.test.js` | 13 | handshake, queue, matchmaking, room isolation, countdown lock, forfeits, limits, origin checks, WebSocket framing |
-| `movement.test.js` | 12 | prediction == simulation bit-for-bit for walking/sprint/slide/hop/air-strafe/wall-run/double-jump, corrections, teleport / speed-hack / lump-after-stall / flooding / replay / aim-rate |
-| `combat.test.js` | 15 | server-side hits and headshots, lag compensation bounds, ammo/reload/cooldowns, melee, grenades, dead players, cheating clients' extra fields |
+| `movement.test.js` | 13 | prediction == simulation bit-for-bit for walking/sprint/slide/hop/air-strafe/wall-run/double-jump, corrections, teleport / speed-hack / lump-after-stall / flooding / replay / aim-rate |
+| `combat.test.js` | 17 | server-side hits and headshots, lag compensation bounds, ammo/reload/cooldowns, melee, grenades, dead players, cheating clients' extra fields |
 | `anticheat.test.js` | 21 | every rule: weights, decay, warn, kick, lockout, severe-event kick, schema rejection, rate limiting, telemetry, redaction |
-| `map.test.js` | 2 | the Test Arena map: spawns clear and on the floor, a server-decided hit, a hidden opponent |
+| `map.test.js` | 28 | the map pool and every map in it: spawns clear, on the floor and inside the play fence, no push-out teleports, Arena symmetry, a server-decided hit |
 | `protection.test.js` | 4 | spawn protection: no damage while protected, shooter told, attacking ends it, the void still kills, per round |
 | `session.test.js` | 12 | tokens, resume, replacement, reconnect grace and forfeit, rematch, room cleanup, information protection, misbehaving client mid-match |
 | `load.test.js` | 1 | 16 simultaneous matches with real input |
+| `ffa.test.js` | 17 | the free-for-all rooms: join / leave, everybody fights everybody, respawns, kill limit, spawn protection, information protection, a full room, idle players |
+| `vote.test.js` | 12 | the map vote of a fresh pairing (options, ties, timeouts, a leaver, the vote switched off) and the instant grenade throw |
+| `speed.test.js` | 10 | speed exploits: slide-jump chains, strafing, blasts, grip on the ground, wall-jump ladders, the movement state round trip |
+| `robust.test.js` | 2 | a bug reached by one message (or one pairing) costs that message, never the server |
 
 They start the real server in-process and drive it with real WebSocket clients, including a *prediction client* that
 runs the game's physics exactly like the browser. A few TEST_MODE-only messages (teleport, state dump) let the tests

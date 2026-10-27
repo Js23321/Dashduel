@@ -1,0 +1,76 @@
+newmtl Mesheswallcracks02a12Mtl
+Material Color
+Ka 0 0 0
+Kd 0 0 0
+Ks 0 0 0 
+
+d 0.45098
+
+Ns 0
+
+map_Ka Part2_diff.png
+map_Kd Part2_diff.png
+map_d Part2_diff.png
+
+newmtl Part1Mtl
+Material Color
+Ka 0.0938759 0.0962661 0.0938759
+Kd 0.0938759 0.0962661 0.0938759
+Ks 0.0371822 0.0381289 0.0371822 
+
+d 1
+
+Ns 0
+
+map_Ka Part1_diff.png
+map_Kd Part1_diff.png
+map_d Part1_diff.png
+
+map_Bump Part1_nmap.png
+
+newmtl Mesheswallcracks02a11Mtl
+Material Color
+Ka 0.00715504 0.018913 0.0315514
+Kd 0.00715504 0.018913 0.0315514
+Ks 0.00283396 0.00749103 0.0124968 
+
+d 1
+
+Ns 0
+
+map_Ka Part1_diff.png
+map_Kd Part1_diff.png
+map_d Part1_diff.png
+
+map_Bump Part1_nmap.png
+
+newmtl Part2Mtl
+Material Color
+Ka 0 0 0
+Kd 0 0 0
+Ks 0 0 0 
+
+d 0.25098
+
+Ns 0
+
+map_Ka Part2_diff.png
+map_Kd Part2_diff.png
+map_d Part2_diff.png
+
+newmtl Part148Mtl
+Material Color
+Ka 0.101145 0.0697271 0.0511221
+Kd 0.101145 0.0697271 0.0511221
+Ks 0.0400614 0.0276174 0.0202483 
+
+d 1
+
+Ns 0
+
+map_Ka Part1_diff.png
+map_Kd Part1_diff.png
+map_d Part1_diff.png
+
+map_Bump Part1_nmap.png
+

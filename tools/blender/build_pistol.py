@@ -1,64 +1,114 @@
 """
-HANDGUN in the Roblox RIVALS look: an all-black, chunky USP-style pistol (reference: the wiki's default model): a thick blocky slide with a
-square muzzle that has a round bore, three vertical vent slits near the front, two round pins on the side, a squared trigger guard and a
-big angled grip with a magazine base plate. No colour accents: it is plain black / charcoal.
-Anchors:  rear sight notch centre (0, 0.082, 0.095)   muzzle (0, 0.045, -0.2)
-Parts: body, slide (pivot 0,0.04,-0.02, moves back on a shot), mag (pivot 0,-0.13,0.078), trigger (pivot 0,-0.02,0.03)
-Materials (game names): dark (frame / grip), poly (slide), gun (slide parts), steel (pins), black (bore)
+HANDGUN: the pistol from the OBJ the player supplied (_models/handgun/Handgun.obj, a Roblox Studio export: 9 mesh parts, 4 flat colours).
+It is a chunky dark pistol: a navy frame with a big grip, a dark slate slide with three vent slits at the front, a black barrel, a black side
+plate with a grey rivet, and a block rear sight with a small front wedge.
+(The first, blocky procedural version of this pistol is kept in _archive/build_pistol_blocky.py.)
+
+What this script does: reads the OBJ itself (no importer: the transform is exact and the mesh stays one-sided), turns it into game coordinates
+(x right, y up, z BACKWARDS: the muzzle is at -z) and fits it to the old pistol's size (0.348 long, muzzle at z = -0.2, barrel axis y = 0.045),
+gives every Roblox colour a game material, and splits two parts off as animated parts: the SLIDE (`slide`: slide body, sights and its rivet: it
+cycles on every shot) and the MAGAZINE (`mag`: it drops out on a reload). The barrel, the frame and the side plate stay fixed.
+Run inside Blender after lib.py (exec of lib.py happens below).
+Anchors the game reads from this model (see SPEC.pistol in js/vmanim.js):
+    front sight tip (0, 0.0822, -0.1664)   rear sight top (0, 0.0858 .. 0.0882, 0.0945)   muzzle (0, 0.045, -0.2)   ejection window (0.03, 0.068, -0.021)
+Parts: body, slide (pivot 0, 0.0434, -0.0286), mag (pivot 0, -0.0784, 0.0883)
+Materials (game names): rvDark (navy frame + grip), rvSlide (dark slate slide), rvBlack (barrel, side plate, sights, magazine), rvGrey (the rivets)
 """
+import os
+
 exec(open(r'C:\Users\ryder\Downloads\Rivel\tools\blender\lib.py').read())
+
+OBJ = r'C:\Users\ryder\Downloads\Rivel\_models\handgun\Handgun.obj'
+
+# OBJ (Roblox studs, long axis x, muzzle at the smallest x) -> game metres
+S = 0.12  # 2.9 studs long -> 0.348 m: the rear sight lands where the old pistol's notch was (z 0.0945, y 0.0858)
+X0 = -48.3648  # the muzzle end
+ZC = 1097.345  # the middle of the pistol's width (z 1097.10 .. 1097.59): the sights are dead centre (x = 0)
+YB = -366.872  # the barrel axis height
+
+
+def to_game(x, y, z):
+    return (-S * (z - ZC), 0.045 + S * (y - YB), -0.2 + S * (x - X0))
+
+
+MATERIAL = {'Meshpart1Mtl': 'rvBlack', 'Meshpart4Mtl': 'rvGrey', 'Meshpart5Mtl': 'rvDark', 'Meshpart8Mtl': 'rvSlide'}
+MAG_GROUPS = ('Meshpart1',)  # the magazine and its base plate (the part inside the grip)
+MAG_PIVOT = (0.0, -0.0784, 0.0883)
+SLIDE_GROUPS = ('Meshpart7', 'Meshpart8', 'Meshpart9')  # rear-sight rivet, the slide itself, and the sights / vent slits on top of it
+SLIDE_PIVOT = (0.0, 0.0434, -0.0286)
+
+
+def read_obj(path):
+    V, VN, groups, cur, mat = [], [], {}, None, None
+    for line in open(path, encoding='utf-8'):
+        t = line.split()
+        if not t:
+            continue
+        if t[0] == 'v':
+            V.append(tuple(float(a) for a in t[1:4]))
+        elif t[0] == 'vn':
+            VN.append(tuple(float(a) for a in t[1:4]))
+        elif t[0] == 'g':
+            cur = t[1]
+            groups[cur] = {'mat': None, 'faces': []}
+        elif t[0] == 'usemtl':
+            mat = t[1]
+            groups[cur]['mat'] = mat
+        elif t[0] == 'f':
+            groups[cur]['faces'].append([(int(p.split('/')[0]) - 1, int(p.split('/')[2]) - 1 if p.count('/') >= 2 else -1) for p in t[1:]])
+    return V, VN, groups
+
+
+def group_object(col, name, V, VN, g, part):
+    bm = bmesh.new()
+    verts = {}
+
+    def vert(i):
+        if i not in verts:
+            verts[i] = bm.verts.new(gb(*to_game(*V[i])))
+        return verts[i]
+
+    # the file's own normals say which way the faces look: flip the whole group if the winding disagrees with them
+    agree = 0
+    for f in g['faces']:
+        if len(f) < 3 or f[0][1] < 0:
+            continue
+        a, b, c = [Vector(to_game(*V[i])) for i, _ in f[:3]]
+        gn = (b - a).cross(c - a)
+        n = VN[f[0][1]]
+        # (the rotation to game axes is proper, so the normal's game version is just the rotated vector)
+        ng = Vector((-n[2], n[1], n[0]))
+        agree += 1 if gn.dot(ng) > 0 else -1
+    flip = agree < 0
+    for f in g['faces']:
+        idx = [i for i, _ in f]
+        if flip:
+            idx.reverse()
+        for k in range(1, len(idx) - 1):  # fan-triangulate quads
+            try:
+                bm.faces.new((vert(idx[0]), vert(idx[k]), vert(idx[k + 1])))
+            except ValueError:
+                pass  # a duplicate face
+    me = bpy.data.meshes.new(name)
+    bm.to_mesh(me)
+    bm.free()
+    ob = bpy.data.objects.new(name, me)
+    col.objects.link(ob)
+    ob.data.materials.append(get_mat(MATERIAL[g['mat']]))
+    ob['part'] = part
+    for p in me.polygons:
+        p.use_smooth = False
+    return ob, flip
+
 
 sc = make_scene('DASHDUEL_Weapons')
 col = make_collection(sc, 'WEAPON_pistol')
-B = 0.003
+V, VN, groups = read_obj(OBJ)
+flips = {}
+for name, g in groups.items():
+    ob, flip = group_object(col, 'pistol_' + name, V, VN, g, 'mag' if name in MAG_GROUPS else 'slide' if name in SLIDE_GROUPS else 'body')
+    flips[name] = flip
+pivot(col, 'mag', *MAG_PIVOT)
+pivot(col, 'slide', *SLIDE_PIVOT)
 
-# ---- frame: dust cover, main frame, hammer -------------------------------------------------------------------------------------------
-box(col, 'dust_cover', 0.054, 0.044, 0.13, 0, -0.001, -0.075, 'dark', bevel=B)           # z -0.14 .. -0.01
-for i in range(2):
-    box(col, 'rail_slot%d' % i, 0.056, 0.008, 0.016, 0, -0.018, -0.11 + i * 0.04, 'black')
-box(col, 'frame', 0.054, 0.056, 0.13, 0, -0.004, 0.05, 'dark', bevel=B)                  # z -0.015 .. 0.115
-box(col, 'rear_strap', 0.03, 0.06, 0.014, 0, 0.0, 0.118, 'dark', bevel=0.002)
-box(col, 'hammer', 0.014, 0.024, 0.014, 0, 0.05, 0.117, 'gun', bevel=0.0012)
-
-# ---- big squared trigger guard ------------------------------------------------------------------------------------------------------------
-box(col, 'guard_front', 0.02, 0.04, 0.012, 0, -0.05, -0.012, 'dark', bevel=0.002)
-box(col, 'guard_bottom', 0.02, 0.011, 0.06, 0, -0.072, 0.014, 'dark', bevel=0.002)
-
-# ---- grip: a big, angled, blocky grip with a curved back-strap and a flared base -------------------------------------------------------------
-prof(col, 'grip', [(0.026, -0.03), (0.118, -0.03), (0.152, -0.165), (0.054, -0.165)], 0.056, 0, 'dark', bevel=B)
-box(col, 'backstrap', 0.058, 0.13, 0.012, 0, -0.1, 0.136, 'black', rot=(-0.26, 0, 0))
-for i in range(4):
-    box(col, 'grip_tex%d' % i, 0.058, 0.006, 0.06, 0, -0.062 - i * 0.025, 0.07 + i * 0.006, 'black')
-box(col, 'base_flare', 0.064, 0.012, 0.11, 0, -0.171, 0.103, 'dark', bevel=0.002)
-box(col, 'lanyard', 0.012, 0.012, 0.016, 0, -0.172, 0.158, 'steel')
-box(col, 'slide_stop', 0.006, 0.01, 0.03, -0.0295, 0.012, 0.0, 'steel')
-box(col, 'decocker', 0.006, 0.012, 0.03, -0.0295, 0.01, 0.075, 'steel')
-
-# ---- slide (animated): pivot at its rest position; a thick slab with the square muzzle ---------------------------------------------------------
-pivot(col, 'slide', 0, 0.04, -0.02)
-prof(col, 'slide', [(-0.2, 0.066), (0.108, 0.066), (0.108, 0.01), (-0.2, 0.01)], 0.06, 0, 'poly', bevel=B, part='slide')
-cyl(col, 'bore', 0.0115, 0.0115, 0.03, 0, 0.04, -0.196, 'black', seg=10, part='slide')   # the round bore in the square muzzle
-for i in range(3):                                                                        # three vertical vent slits near the front
-    box(col, 'vent%d' % i, 0.0625, 0.04, 0.008, 0, 0.037, -0.17 + i * 0.022, 'black', part='slide')
-for sx in (1, -1):                                                                        # two round pins on each side of the slide
-    box(col, 'pin_a%d' % sx, 0.008, 0.012, 0.012, sx * 0.0305, 0.052, 0.05, 'steel', part='slide')
-    box(col, 'pin_b%d' % sx, 0.008, 0.012, 0.012, sx * 0.0305, 0.022, 0.0, 'steel', part='slide')
-for i in range(5):                                                                        # rear serrations
-    box(col, 'serration%d' % i, 0.0625, 0.05, 0.005, 0, 0.037, 0.062 + i * 0.01, 'black', part='slide')
-box(col, 'ejection', 0.004, 0.022, 0.05, 0.031, 0.04, 0.0, 'black', part='slide')
-# blocky sights: rear blocks with the notch between them (centre y = 0.082), front post (tip y = 0.082)
-box(col, 'rear_sightL', 0.014, 0.03, 0.018, 0.0155, 0.079, 0.095, 'gun', bevel=0.0015, part='slide')
-box(col, 'rear_sightR', 0.014, 0.03, 0.018, -0.0155, 0.079, 0.095, 'gun', bevel=0.0015, part='slide')
-box(col, 'rear_base', 0.045, 0.008, 0.018, 0, 0.066, 0.095, 'gun', part='slide')
-box(col, 'front_post', 0.012, 0.022, 0.016, 0, 0.074, -0.18, 'gun', bevel=0.0015, part='slide')
-
-# ---- magazine base (animated: drops out on a reload) ---------------------------------------------------------------------------------------------
-pivot(col, 'mag', 0, -0.13, 0.078)
-box(col, 'mag_body', 0.044, 0.044, 0.07, 0, -0.13, 0.078, 'gun', bevel=0.0015, part='mag')
-box(col, 'mag_plate', 0.06, 0.012, 0.1, 0, -0.158, 0.1, 'dark', bevel=0.002, part='mag')
-
-# ---- trigger (animated) ----------------------------------------------------------------------------------------------------------------------------
-pivot(col, 'trigger', 0, -0.02, 0.03)
-box(col, 'trigger', 0.01, 0.028, 0.012, 0, -0.03, 0.03, 'gun', part='trigger')
-
-result = stats(col)
+result = dict(stats(col), flipped=[k for k, v in flips.items() if v])

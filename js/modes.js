@@ -83,7 +83,9 @@
     G.zoom = 0;
     RV.input.onFire = G.onFirePress;
     RV.input.onUnlockedClick = G.onUnlockedClick;
-    G.awaitLock = false;
+    // (a mouse lock the browser does not grant at the start - the click behind it is too old, the platform refuses the raw-input request - waits for
+    // a click with "click to capture the mouse"; it never opens the pause menu)
+    G.awaitLock = !RV.input.noLock;
     RV.input.onWheel = G.onWheel;
     G.modeImpl = RV.modes[mode];
     G.modeImpl.init(G);
@@ -235,9 +237,9 @@
       return;
     }
     if (locked) G.awaitLock = false;
-    // an online match that started by itself (no click on "Enter match") cannot lock the mouse until the player clicks:
-    // that refusal is expected, so show "click to capture the mouse" instead of opening the pause menu
-    else if (error && G.awaitLock && G.state === 'playing' && !G.menuOpen) return;
+    // a game whose mouse lock was never granted (an online match that started by itself, a click that was too old, a refused raw-input request)
+    // is not a player leaving it: show "click to capture the mouse" instead of opening the pause menu
+    else if (G.awaitLock && G.state === 'playing' && !G.menuOpen) return;
     if (G.state === 'playing' && !G.menuOpen && (!locked || error)) G.pause();
     else if ((G.state === 'paused' || G.menuOpen) && locked && !RV.ui.settingsOpenFromPause) G.resume();
   };
@@ -471,6 +473,12 @@
         if (inp.consume('lastweapon')) G.weapons.selectLast();
         if (inp.consume('quickmelee')) G.weapons.quickMelee();
         if (inp.consume('quickgrenade')) G.weapons.quickGrenade();
+      } else {
+        // keys pressed while dead are not kept for the next life (a G or F tapped at the death screen would otherwise throw / punch at the respawn)
+        for (let i = 0; i < RV.WEAPONS.length; i++) inp.consume('weapon' + (i + 1));
+        inp.consume('lastweapon');
+        inp.consume('quickmelee');
+        inp.consume('quickgrenade');
       }
       if (inp.consume('respawn')) G.modeImpl.onRespawnKey && G.modeImpl.onRespawnKey(G);
       if (inp.consume('setspawn')) G.modeImpl.onSetSpawnKey && G.modeImpl.onSetSpawnKey(G);
@@ -583,6 +591,7 @@
       vs.wallSide = pl.wallSide;
       vs.sprint = false; // (no sprint pose: the default speed is the run speed, the weapon stays up)
       vs.vy = pl.b.vy;
+      vs.strafe = pl.b.vx * Math.cos(pl.yaw) - pl.b.vz * Math.sin(pl.yaw); // m/s towards your right (negative: to your left)
       vs.firing = inp.isDown('fire') && G.canShoot();
       vs.fx = R().fxLevel || S.effects;
       RV.viewmodel.update(dtReal, vs);

@@ -441,3 +441,25 @@ test('the debug summary and /health list the room (players per map) without expo
   a.tc.close();
   await sleep(100);
 });
+
+test('a grenade of a player who has since left still goes off, but nobody is named as the thrower (their seat may belong to someone else by now)', async () => {
+  const a = await join('Alpha');
+  const b = await join('Bravo');
+  const pa = inRoom('Alpha');
+  const seatA = pa.seat;
+  a.tc.send({ t: 'leave' });
+  for (let i = 0; i < 40 && !pa.gone; i++) await sleep(25);
+  assert.ok(pa.gone, 'Alpha is out of the room');
+  const c = await join('Carol'); // takes the seat Alpha left
+  assert.strictEqual(inRoom('Carol').seat, seatA, 'the seat was handed on');
+  for (const x of [b, c]) x.tc.clear();
+  room().damage(inRoom('Bravo'), 9999, pa, { head: false, src: 'grenade', from: { x: 0, z: 0 } }); // (Alpha's grenade, thrown before they left, goes off now)
+  const hurt = await b.tc.wait('hurt', null, 2000);
+  assert.strictEqual(hurt.by, -1, 'the victim is not told the new owner of the seat threw it');
+  const feed = await c.tc.wait('fkf', (m) => m.v === b.j.you, 2000);
+  assert.strictEqual(feed.k, -1, 'the kill feed does not credit the new owner of the seat');
+  assert.strictEqual(inRoom('Carol').kills, 0, 'and Carol gets no point for it');
+  b.tc.close();
+  c.tc.close();
+  await sleep(100);
+});

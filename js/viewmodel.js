@@ -272,6 +272,8 @@
       acc: M.glow(0x2ee6ff), accY: M.glow(0xffc400), white: M.glow(0xffffff),
       // the RIVALS assault rifle's own five colours (from its mesh export): navy frame and rings, orange shell, red-orange lower, grey trim, black magazine
       rvDark: M.alloy(0x0e172e, 0.2), rvOrange: M.alloy(0xe39c3e, 0.1), rvOrangeDark: M.alloy(0xd6743a, 0.1), rvGrey: M.alloy(0x565756, 0.3), rvBlack: M.alloy(0x090909, 0.25),
+      // ... and the RIVALS handgun's slide: a slate blue, a shade lighter than the navy frame
+      rvSlide: M.alloy(0x142532, 0.25),
     });
     return t[name] || M.gun;
   }

@@ -56,10 +56,10 @@ module.exports = {
   ADMIN_TOKEN: env.ADMIN_TOKEN || '',
   TEST_MODE: env.TEST_MODE === '1', // TESTS ONLY: enables the test-only teleport message. Never set in production.
 
-  PROTOCOL: 6, // bump when the client/server messages or the shared movement physics change incompatibly (3: one run speed, no sprint; 4: the free-for-all room; 5: grip, speed bleed and the wall-jump climb cap, one more player-state field; 6: the map vote, the instant grenade throw)
+  PROTOCOL: 7, // bump when the client/server messages or the shared movement physics change incompatibly (3: one run speed, no sprint; 4: the free-for-all room; 5: grip, speed bleed and the wall-jump climb cap, one more player-state field; 6: the map vote, the instant grenade throw; 7: the Dark Arena joins the pool - a page without its data files could not play it)
   TICK_HZ: 30, // snapshots and room housekeeping per second (movement is stepped at 120 Hz, see js/player.js)
   MAX_MESSAGE: 4096, // bytes per client message
-  MAPS: ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms'], // online 1v1 maps (Arena, Bridge, Crossroads, Docks, Station, Backrooms; ids that have no data file are skipped)
+  MAPS: ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms', 'darkarena'], // online 1v1 maps (Arena, Bridge, Crossroads, Docks, Station, Backrooms, Dark Arena; ids that have no data file are skipped)
   TO: 5, // rounds to win a match
   COUNTDOWN: 3, // seconds locked in the spawn at the start of every round
   ROUND_TIME: 90, // seconds per round (then most health wins)

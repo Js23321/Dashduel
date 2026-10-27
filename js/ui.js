@@ -211,7 +211,10 @@
       });
     };
     if (!RV.netclient || !RV.netclient.probe) return tag(null);
-    RV.netclient.probe().then(tag, () => tag(null));
+    // (clicking through the cards re-draws them every time: one probe socket serves all of that, not one per click)
+    const last = UI._ffaProbe;
+    if (!last || Date.now() - last.at > 3000) UI._ffaProbe = { at: Date.now(), p: RV.netclient.probe() };
+    UI._ffaProbe.p.then(tag, () => tag(null));
   };
 
   // ---------------------------------------------------------------- settings

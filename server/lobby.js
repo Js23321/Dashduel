@@ -52,7 +52,13 @@ class Client {
     this.over = 0;
 
     conn.on('message', (text) => this.onText(text));
-    conn.on('close', () => lobby.onClose(this));
+    conn.on('close', () => {
+      try {
+        lobby.onClose(this);
+      } catch (e) {
+        lobby.handlerError('close', e);
+      }
+    });
   }
 
   get sid() {
@@ -100,7 +106,13 @@ class Client {
       this.lobby.violate(this, 'bad_message', { why: 'schema', type: raw && typeof raw.t === 'string' ? raw.t.slice(0, 16) : typeof raw });
       return;
     }
-    this.lobby.onMessage(this, m);
+    // This runs inside the socket's data event: an exception here (a bug in the game code that one player's message happened to reach)
+    // must cost that one message, never the whole server with every other match on it.
+    try {
+      this.lobby.onMessage(this, m);
+    } catch (e) {
+      this.lobby.handlerError(m.t, e);
+    }
   }
 }
 
@@ -119,7 +131,7 @@ class Lobby {
     this.nextRoom = 1;
     this.perIp = new Map();
     this.started = Date.now();
-    this.totals = { connections: 0, matches: 0, finished: 0, kicks: 0, reconnects: 0 };
+    this.totals = { connections: 0, matches: 0, finished: 0, kicks: 0, reconnects: 0, errors: 0 };
     this.lastTick = now();
     this.timer = null;
   }
@@ -151,6 +163,12 @@ class Lobby {
     this.totals.connections++;
     log.debug('connect', { cid: c.id });
     return c;
+  }
+
+  /** An exception in a network handler (message / close): logged, counted, and then ignored. Clients never see the internals. */
+  handlerError(what, e) {
+    this.totals.errors++;
+    log.warn('handler_error', { what: String(what).slice(0, 16), msg: String(e && e.message).slice(0, 120), at: String((e && e.stack) || '').split('\n')[1] });
   }
 
   /** Record a rule violation for this client and act on the verdict (warn / kick). */
@@ -420,7 +438,19 @@ class Lobby {
   }
 
   startRoom(a, b, map) {
-    const room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
+    let room;
+    try {
+      room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
+    } catch (e) {
+      // (a map that cannot be loaded, say) the two players are told plainly and can search again; the server is not affected
+      this.handlerError('startRoom', e);
+      for (const c of [a, b]) {
+        c.room = null;
+        c.state = c.alive() ? 'idle' : c.state;
+        c.send({ t: 'err', code: 'server', msg: 'The match could not be started. Please try again.' });
+      }
+      return;
+    }
     a.state = b.state = 'room';
     a.session.room = b.session.room = room;
     this.rooms.add(room);
@@ -446,7 +476,20 @@ class Lobby {
     const t = now();
     const dt = Math.min(0.1, (t - this.lastTick) / 1000);
     this.lastTick = t;
-    for (const v of [...this.votes]) if (t >= v.until) this.finishVote(v);
+    for (const v of [...this.votes]) {
+      if (t < v.until) continue;
+      try {
+        this.finishVote(v);
+      } catch (e) {
+        // (the match could not be made: both players go back to idle with a plain message, the server carries on)
+        this.handlerError('vote', e);
+        v.a.vote = v.b.vote = null;
+        for (const c of [v.a, v.b]) {
+          if (c.state === 'voting' || c.state === 'queued') c.state = 'idle';
+          c.send({ t: 'err', code: 'server', msg: 'The match could not be started. Please try again.' });
+        }
+      }
+    }
     for (const r of [...this.rooms, ...this.ffa.values()]) {
       try {
         r.tick(t, dt);

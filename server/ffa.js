@@ -497,7 +497,8 @@ class FfaRoom {
     let credit = attacker;
     if (kill && info.src === 'fall' && !credit && victim.lastHurtBy && !victim.lastHurtBy.gone && t - victim.lastHurtAt < F.CREDIT_S * 1000) credit = victim.lastHurtBy; // pushed or shot into the void
     const from = info.from || victim.pl.b;
-    victim.cl.send({ t: 'hurt', dmg, hp: victim.hp, h: info.head ? 1 : 0, x: r3(from.x), z: r3(from.z), src: info.src, by: attacker ? attacker.seat : -1, rs: kill ? F.RESPAWN_S : 0 });
+    // (a thrower who has left the room since: their grenade still goes off, but their seat may belong to somebody else by now)
+    victim.cl.send({ t: 'hurt', dmg, hp: victim.hp, h: info.head ? 1 : 0, x: r3(from.x), z: r3(from.z), src: info.src, by: attacker && !attacker.gone ? attacker.seat : -1, rs: kill ? F.RESPAWN_S : 0 });
     if (attacker && !attacker.gone) {
       attacker.tele.hits++;
       attacker.cl.send({ t: 'hit', dmg, head: !!info.head, kill, src: info.src, v: victim.seat });
@@ -518,7 +519,7 @@ class FfaRoom {
       killer.kills++;
       killer.streak++;
     }
-    const msg = { t: 'fkf', k: killer && killer !== victim ? killer.seat : -1, v: victim.seat, w: info.src, h: info.head ? 1 : 0 };
+    const msg = { t: 'fkf', k: killer && killer !== victim && !killer.gone ? killer.seat : -1, v: victim.seat, w: info.src, h: info.head ? 1 : 0 };
     for (const q of this.slots) if (q && !q.waiting) q.cl.send(msg);
     this.boardDirty = true;
     if (killer && killer !== victim && !killer.gone && killer.kills >= F.KILL_LIMIT) this.roundWon(killer);

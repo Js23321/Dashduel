@@ -1,5 +1,5 @@
 'use strict';
-// The map pool (Arena, Bridge, Crossroads, Docks, Station, Backrooms) works online: every map is registered from its Blender collision data, has clear
+// The map pool (Arena, Bridge, Crossroads, Docks, Station, Backrooms, Dark Arena) works online: every map is registered from its Blender collision data, has clear
 // spawns, hidden and open fighting spots and no open edge (except the Docks' lethal water); hits are decided by the server and walls hide the opponent.
 process.env.TEST_MODE = '1';
 const { test } = require('node:test');
@@ -16,9 +16,9 @@ test.after(async () => {
   await srv.stop();
 });
 
-const POOL = ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms'];
+const POOL = ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms', 'darkarena'];
 
-test('the online map pool is exactly Arena, Bridge, Crossroads, Docks, Station, Backrooms (the old maps are retired)', () => {
+test('the online map pool is exactly Arena, Bridge, Crossroads, Docks, Station, Backrooms, Dark Arena (the old maps are retired)', () => {
   assert.deepStrictEqual(CFG.MAPS, POOL);
   for (const id of POOL) assert.ok(RV.maps[id], id + ' is registered (its mapdata file loaded)');
   for (const old of ['toybox', 'skybridge', 'pinwheel', 'vertigo']) assert.strictEqual(RV.maps[old], undefined, old + ' is no longer active');

@@ -18,6 +18,7 @@
     onFire: null, // called synchronously on a fire press
     onWheel: null, // called with the wheel direction (-1 / +1)
     noLock: false, // test hook: behave as if pointer lock were granted
+    rawLock: true, // ask for unadjusted (raw) mouse movement first; false once the platform has refused that
     _map: {},
     lockFailedAt: 0,
     _lastWheel: 0,
@@ -105,10 +106,17 @@
         /* ignore */
       }
     };
+    // raw (unadjusted) mouse input first; a platform that cannot give it refuses that request, and then every later request goes straight to the plain one
+    if (!input.rawLock) return plain();
     try {
       const p = el.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(plain);
+      if (p && p.catch)
+        p.catch((e) => {
+          if (e && e.name === 'NotSupportedError') input.rawLock = false;
+          plain();
+        });
     } catch (e) {
+      input.rawLock = false;
       plain();
     }
   };

@@ -183,8 +183,9 @@
           RV.settings.adsCentre = RV.DEFAULT_SETTINGS.adsCentre;
           RV.settings.adsVer = RV.DEFAULT_SETTINGS.adsVer;
         }
-        if (!(saved.bindsVer >= RV.DEFAULT_SETTINGS.bindsVer)) {
-          // older saves: Shift was Sprint and Ctrl / C slid. Now you always run and Shift slides.
+        if (!(saved.bindsVer >= 3)) {
+          // older saves: Shift was Sprint and Ctrl / C slid. Now you always run and Shift slides. (Saves from version 3 on already had that:
+          // their own slide key must survive the later bumps.)
           for (const id in RV.settings.binds) for (let i = 0; i < 2; i++) if (RV.settings.binds[id][i] === 'ShiftLeft') RV.settings.binds[id][i] = '';
           RV.settings.binds.slide = RV.DEFAULT_BINDS.slide.slice();
         }

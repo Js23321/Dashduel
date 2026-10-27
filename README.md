@@ -76,10 +76,11 @@ Personal bests, win streaks, accuracy, top speeds and eliminations are saved in 
 | 4 | **Docks** | large (96 x 76 m) | waterfront cargo yard: container alleys (single and double stacks), a gantry crane, a dockmaster's hut, a harbour office and a warehouse (two floors, windows, stairs, interiors). The north side and the piers are **open water: falling in is lethal** (the kill height sits 3 m under the surface) |
 | 5 | **Station** | large (78 x 60 m) | a stylised Western railway station: two steam trains (locomotive + three carriages each, with door and window openings: fight through them) either side of an island platform with a canopy; the station hall and the depot (two floors, a stair, a balcony over an open double-height hall) |
 | 6 | **Backrooms** | medium (56 x 56 m, 3.4 m ceiling) | an enclosed maze of 4 m yellow-office corridors, two red-carpet rooms (spawns), two pool-tile rooms and a lit atrium with a 1.2 m platform on ramps and a central column. Bright ceiling lights and a short yellow haze, so it is never too dark |
+| 7 | **Dark Arena** | compact (27 x 39 m, 9 m walls) | a dark walled arena under a night sky, imported from the supplied Roblox model (`_models/dark-arena/Dark arena.obj`, scale 0.3 m per stud): slate-blue floor and cracked walls with the brown showing through, grey cover - a **table on four legs** in the middle, four **turned slabs**, two **windowed arches**, low blocks on the sides - and a **tall wall** in front of each end. **Six spawns sit right behind that wall at each end**, so the two players always start on opposite ends, hidden from the middle; a steep **ramp** in one corner of each end leads to a 4.5 m perch. Light strips along the wall tops, a blue pad and a red pad behind the end walls |
 | - | **The Yard** | huge | practice field with a station for every mechanic (Practice mode) |
 | - | **Gauntlet** | course | one-way time-trial course (Time Trial mode) |
 
-Every duel map is symmetric (Arena / Bridge / Crossroads / Station / Backrooms: 180-degree rotation, Docks: left-right mirror), so
+Every duel map is symmetric (Arena / Bridge / Crossroads / Station / Backrooms / Dark Arena: 180-degree rotation, Docks: left-right mirror), so
 neither spawn has an advantage. The four earlier maps (Toybox, Skybridge, Pinwheel, Vertigo) were retired from the pool; they are
 kept in `_archive/maps-legacy.js` (how to bring them back is in that file's header) and the git branch
 `backup/pre-rivals-overhaul` holds the complete game as it was before the change.
@@ -116,7 +117,7 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
   client: `UI.showVote` and the vote handlers in `js/online.js`; tests: `server/test/vote.test.js`.
 * **Rules:** first to **5 round wins**, 150 health each. Each round: both players spawn on opposite sides (a **different pair of spawn points each round**), a **3 second
   countdown** with movement and shooting locked (this is the spawn protection: nobody can move, shoot or be hurt before "FIGHT"), then the fight; a round ends on an elimination (or after 90 s: most
-  health wins). Between rounds nobody is frozen. Maps: Arena, Bridge, Crossroads, Docks, Station, Backrooms (a random one per match).
+  health wins). Between rounds nobody is frozen. Maps: Arena, Bridge, Crossroads, Docks, Station, Backrooms, Dark Arena (the two players vote on three of them before each match).
 * **Who decides what:** your browser sends *input* (keys + view angles, numbered) and *requests* ("fire", "reload",
   "throw": no direction, no damage). The **server** simulates your movement with the same physics, so your position is
   whatever the rules allow for that input; your browser predicts it locally so it feels instant, and the server corrects
@@ -157,22 +158,22 @@ default models, the real-world bases are the ones the RIVALS wiki names): the **
 (`_models/assault-rifle/AssualtRifle.obj`, converted by `tools/blender/build_rifle.py`; the first procedural version is in
 `_archive/build_rifle_procedural.py`): an orange SCAR-style rifle with a navy frame, vent slots, a ribbed black magazine and two flip-up
 **ring sights**. **Its sight is one circle**: you aim through the octagonal rear ring and see the front ring and its spike standing inside it; the
-magazine and the **charging handle** (the short stick that sticks out of the left side of the handguard) are animated parts (the handle slides back on every shot); the **Handgun** is an all-black
-USP-style slab with a square bore, three vents and two pins on the slide; the **Grenade** is a faceted dark-green M67 with a gold
+magazine and the **charging handle** (the short stick that sticks out of the left side of the handguard) are animated parts (the handle slides back on every shot); the **Handgun** is the pistol from `_models/handgun/Handgun.obj` (a Roblox export, imported by
+`tools/blender/build_pistol.py`; the first blocky version is in `_archive/build_pistol_blocky.py`): a navy frame and big grip, a slate slide with three vents, a black barrel and a U-notch rear sight with the front wedge standing in it; the slide and the magazine are animated parts; the **Grenade** is a faceted dark-green M67 with a gold
 collar and a navy fuze and lever; the **Fists** are two thick, short block arms (black sleeve, skin-coloured hand end). They are exported as
-data (`js/models-weapons.js`). Animated pieces (magazine, slide, charging handle, trigger, grenade lever and pin) are separate
+data (`js/models-weapons.js`). Animated pieces (magazine, slide, charging handle, grenade lever and pin) are separate
 parts with pivots, so every animation works on them. Opponents hold simpler low-poly versions of the weapons (drawn small and
 far away).
 
 ### Maps and the lobby
 Everything lives in `_models/dashduel-models.blend` (one Blender scene per map: *DASHDUEL_Lobby, _Arena, _Bridge, _Crossroads,
-_Docks, _Station, _Backrooms, _Shared* (the reusable pieces), _Weapons). Each scene has a top-level collection named after the
+_Docks, _Station, _Backrooms, _DarkArena, _Shared* (the reusable pieces), _Weapons). Each scene has a top-level collection named after the
 map (`BRIDGE`, `DOCKS`, ...) with one sub-collection per kind of object (Buildings, Cover, Cars, Containers, Signs...), a
 `<MAP>_COLLISION` proxy collection (wire boxes) and a `<MAP>_PREVIEW` collection (sun + cameras for inspection). All objects sit
 at the origin with identity transforms, materials are `DD_<map>_<name>`, units are metres at game scale.
 
 One script per map describes it as boxes / ramps / octagonal prisms (`tools/blender/build_bridge.py`, `build_crossroads.py`,
-`build_docks.py`, `build_station.py`, `build_backrooms.py`, `build_testarena.py`, `build_lobby.py`, shared helpers in `mapkit.py`) and, run inside
+`build_docks.py`, `build_station.py`, `build_backrooms.py`, `build_darkarena.py` (reads the OBJ in `_models/dark-arena/`), `build_testarena.py`, `build_lobby.py`, shared helpers in `mapkit.py`) and, run inside
 Blender, writes **both halves of the map from the same scene**:
 
 | file | what | loaded by |
@@ -292,7 +293,7 @@ rebound in *Settings → Keybinds* (the old *Previous weapon* key moved to `V`).
 All four weapons are held by the same pair of **block fists**: one thick rectangular block each, a black sleeve (most of it) and a
 skin-coloured hand on its end (`buildFist` in `js/viewmodel.js`; on the guns and the grenade they are drawn at 70-80 % so they never cover the
 sight picture). They follow every animation: idle, run, slide, jump,
-landing dip, firing (at the hip the **rifle** is thrown back towards you and springs forward past where it was, mostly along the barrel, with a small up-and-down a quarter swing behind it (about 1 cm against 5 cm back and forth), so each shot sends the gun round a small oval, never pitching it up or rocking it, and a full-auto burst keeps it circling; **while aiming down the sights it does not shake at all** (only its charging handle slides back), and nothing your body does moves an aimed gun either: the slide and wall-run tilts fade out as you aim, like the walking bob and the jump sag already did;  the **handgun** does not shake: only its slide (the top) cycles; this is only the picture, your aim never moves: still **zero recoil** for the shot), reloads (the supporting hand pulls the magazine), weapon
+landing dip, firing (at the hip the **rifle** is thrown back towards you and springs forward past where it was, mostly along the barrel, with a small up-and-down a quarter swing behind it (about 1 cm against 5 cm back and forth), so each shot sends the gun round a small oval, never pitching it up or rocking it, and a full-auto burst keeps it circling; **while aiming down the sights it does not shake at all** (only its charging handle slides back), an aimed gun stays dead still while you slide, wall-run or run straight, but it has its own small sway: **strafing angles it the way you move** (right: turned and rolled to the right, left: to the left, about 3 degrees at full speed), **a jump lifts it** (up to 1.6 cm) **and the fall lets it sink**, and **a landing bounces it a little** (a few swings of about 1 cm that die away within half a second);  the **handgun** does not shake: only its slide (the top) cycles; this is only the picture, your aim never moves: still **zero recoil** for the shot), reloads (the supporting hand pulls the magazine), weapon
 switching, the grenade pin pull and throw and punches (the double jump has no hand animation). The weapon is drawn in its own pass, so it
 never clips into walls.
 
@@ -449,7 +450,7 @@ js/menulayout.js     main-menu layout B / D: switch, persistence
 js/menubg.js         the slow 3D arena behind the main menu
 js/stats.js          records / personal bests
 js/maps.js           map definitions
-js/mapdata-<id>.js   collision + spawns of a map made in Blender (bridge, crossroads, docks, station, backrooms), loaded by browser AND server
+js/mapdata-<id>.js   collision + spawns of a map made in Blender (bridge, crossroads, docks, station, backrooms, darkarena), loaded by browser AND server
 js/mesh-<id>.js      the picture of a map / the lobby (testarena, lobby, bridge, ...), exported from Blender; maps' pictures load on demand
 js/lobby.js          the 3D lobby: scene, camera stops, avatar, rack, matchmaking board, zone cards, real server status
 css/lobby.css        the lobby's interface layer
@@ -484,8 +485,9 @@ _archive/            retired code (the old peer-to-peer transport, the Tactical 
 
 ## Testing
 ```bash
-cd server && npm test            # 123 server tests (serial, ~6 min): movement prediction == simulation, combat, anti-cheat rules,
-                                 # sessions / reconnect / rematch, information protection, lobby, WebSocket layer, load
+cd server && npm test            # 150 server tests (serial, ~6 min): movement prediction == simulation, combat, anti-cheat rules,
+                                 # sessions / reconnect / rematch, information protection, lobby, WebSocket layer, load,
+                                 # free-for-all rooms, the map vote, speed exploits, and a server that survives its own bugs
 ```
 The browser side was verified with headless Chrome against the real server: two real browsers queueing, playing a full
 5-round match (countdown lock, prediction with zero corrections, hidden opponent, server-confirmed hits, a dropped and
