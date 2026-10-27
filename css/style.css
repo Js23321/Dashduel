@@ -301,6 +301,29 @@ input.text:focus { outline: 0; border-color: var(--acc); }
 .queue-vs span { font-size: 10px; letter-spacing: 3px; color: var(--tx3); text-transform: uppercase; }
 .queue-status { text-align: center; font-size: 13px; color: var(--tx2); min-height: 20px; }
 .queue-status.err { color: var(--red); }
+/* the map vote on the queue screen */
+#scr-queue .panel.voting { width: 720px; }
+#scr-queue .panel.voting > .fine { display: none; } /* (the general explanation makes way for the vote) */
+.vote { margin: 14px 0 6px; }
+.vote-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--tx2); }
+.vote-time { font-family: var(--mono); font-size: 22px; font-weight: 300; letter-spacing: 0; color: var(--tx); }
+.vote-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.vote-card { background: var(--raise); border: 1px solid var(--line); padding: 12px 14px; cursor: pointer; text-align: left; position: relative; transition: border-color .12s, background .12s; }
+.vote-card:hover { background: var(--raise2); }
+.vote-card:focus-visible { outline: 1px solid var(--acc); }
+.vote-card.mine { border-color: var(--acc-line); background: linear-gradient(180deg, var(--acc-dim), transparent 70%), var(--raise); box-shadow: inset 2px 0 0 var(--acc); }
+.vote-card.win { border-color: var(--hi, #2ee08a); box-shadow: inset 0 0 0 1px var(--hi, #2ee08a); }
+.vote-card.lost { opacity: .45; }
+.vote-card .swatch { display: flex; gap: 3px; margin-bottom: 8px; }
+.vote-card .swatch i { width: 20px; height: 4px; }
+.vote-card h3 { font-size: 14px; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+.vote-card .tag { font-size: 9px; letter-spacing: 2px; padding: 1px 6px; border: 1px solid var(--line2); color: var(--tx2); font-weight: 500; text-transform: uppercase; }
+.vote-card p { margin: 0 0 8px; color: var(--tx2); font-size: 12px; line-height: 1.5; min-height: 54px; }
+.vote-card .key { position: absolute; top: 10px; right: 12px; font-family: var(--mono); font-size: 11px; color: var(--tx3); border: 1px solid var(--line2); padding: 0 6px; }
+.vote-card .votes { font-family: var(--mono); font-size: 12px; color: var(--tx3); }
+.vote-card .votes b { color: var(--tx); }
+.vote-bar { height: 3px; background: var(--line); margin: 12px 0 8px; overflow: hidden; }
+.vote-bar i { display: block; height: 100%; width: 100%; background: var(--acc); transform-origin: left center; }
 .queue-time { text-align: center; font-family: var(--mono); font-size: 30px; font-weight: 300; margin: 6px 0 10px; }
 .queue-bar { height: 2px; background: var(--line); overflow: hidden; margin: 6px 0 12px; position: relative; }
 .queue-bar::after { content: ""; position: absolute; left: -30%; top: 0; width: 30%; height: 100%; background: var(--acc); animation: qb 1.4s linear infinite; }

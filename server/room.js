@@ -502,7 +502,9 @@ class Room {
         p.pinSim = -1;
         return;
       case 'nade':
-        return this.doNade(p, t, simT);
+        return this.doNade(p, t, simT, false);
+      case 'nadeq':
+        return this.doNade(p, t, simT, true); // the instant throw (G): no pin, the weapon in hand does not change
       case 'nadeself':
         return this.doNadeSelf(p, t, simT);
     }
@@ -618,14 +620,19 @@ class Room {
     if (hit >= 0) this.damage(q, FISTS.dmg, p, { head: false, src: 'fists', from: o });
   }
 
-  doNade(p, t, simT) {
-    if (p.slot !== 3 || p.pinSim < 0 || p.grenades <= 0) {
-      this.violate(p, 'nade_rate', { why: 'no pin' });
-      return;
-    }
-    if (simT - p.pinSim < 0.15) {
-      this.violate(p, 'nade_rate', { why: 'too fast' });
-      return;
+  /** `quick`: the instant throw (G) - it needs a grenade in stock and nothing else (no pin, any weapon in hand). */
+  doNade(p, t, simT, quick) {
+    if (quick) {
+      if (p.grenades <= 0) return; // (the stock restocks on slightly different clocks: nothing to throw is not an offence)
+    } else {
+      if (p.slot !== 3 || p.pinSim < 0 || p.grenades <= 0) {
+        this.violate(p, 'nade_rate', { why: 'no pin' });
+        return;
+      }
+      if (simT - p.pinSim < 0.15) {
+        this.violate(p, 'nade_rate', { why: 'too fast' });
+        return;
+      }
     }
     p.protUntil = 0;
     const d = this.aimOf(p, this.fwd);

@@ -56,7 +56,7 @@ module.exports = {
   ADMIN_TOKEN: env.ADMIN_TOKEN || '',
   TEST_MODE: env.TEST_MODE === '1', // TESTS ONLY: enables the test-only teleport message. Never set in production.
 
-  PROTOCOL: 4, // bump when the client/server messages change incompatibly (3: one run speed, no sprint; 4: the free-for-all room)
+  PROTOCOL: 6, // bump when the client/server messages or the shared movement physics change incompatibly (3: one run speed, no sprint; 4: the free-for-all room; 5: grip, speed bleed and the wall-jump climb cap, one more player-state field; 6: the map vote, the instant grenade throw)
   TICK_HZ: 30, // snapshots and room housekeeping per second (movement is stepped at 120 Hz, see js/player.js)
   MAX_MESSAGE: 4096, // bytes per client message
   MAPS: ['testarena', 'bridge', 'crossroads', 'docks', 'station', 'backrooms'], // online 1v1 maps (Arena, Bridge, Crossroads, Docks, Station, Backrooms; ids that have no data file are skipped)
@@ -84,6 +84,13 @@ module.exports = {
     IDLE_S: num(env.FFA_IDLE_S, 120), // no movement, aim or action for this long: moved out of the room (an AFK player must not sit there forever)
     HEAR_M: 90, // shots, punches and blasts are only sent to players closer than this
     CREDIT_S: 6, // a fall into the void within this many seconds of being hurt counts for whoever hurt the player last
+  },
+
+  // ---- the map vote (1v1): two players who have just been paired vote on the map before it loads -------------
+  VOTE: {
+    ENABLED: env.MAP_VOTE !== '0', // 0 = the server picks a random map, as before
+    OPTIONS: num(env.VOTE_OPTIONS, 3), // maps on offer: picked at random from MAPS (fewer if the pool is smaller)
+    SECONDS: num(env.VOTE_SECONDS, 12), // the vote closes after this long, or as soon as both have voted; nobody voting = one of the options at random
   },
 
   // ---- server-side movement simulation (the server steps js/player.js with the client's inputs) -------------

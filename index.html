@@ -18,10 +18,10 @@
 })();
 </script>
 <meta name="theme-color" content="#061526">
-<link rel="stylesheet" href="css/style.css?v=20261026f">
-<link rel="stylesheet" href="css/theme-arcade.css?v=20261026f">
-<link rel="stylesheet" href="css/lobby.css?v=20261026f">
-<link rel="stylesheet" href="css/rivals-ui.css?v=20261026f">
+<link rel="stylesheet" href="css/style.css?v=20261027g">
+<link rel="stylesheet" href="css/theme-arcade.css?v=20261027g">
+<link rel="stylesheet" href="css/lobby.css?v=20261027g">
+<link rel="stylesheet" href="css/rivals-ui.css?v=20261027g">
 </head>
 <body>
 <canvas id="game"></canvas>
@@ -177,6 +177,12 @@
       <h2 id="queue-title">Finding an opponent</h2>
       <div class="queue-vs"><b id="queue-me">&mdash;</b><span>vs</span><b id="queue-opp">?</b></div>
       <div id="queue-status" class="queue-status">Connecting&hellip;</div>
+      <div id="queue-vote" class="vote hidden">
+        <div class="vote-head"><b>Vote for the map</b><span id="vote-time" class="vote-time">12</span></div>
+        <div id="vote-cards" class="vote-cards"></div>
+        <div class="vote-bar"><i id="vote-bar-fill"></i></div>
+        <p class="fine">Click a map or press <b>1</b> / <b>2</b> / <b>3</b>. The most votes win; a tie, or nobody voting, is decided by chance. You can change your vote until the time is up.</p>
+      </div>
       <div id="queue-time" class="queue-time">0:00</div>
       <p class="fine">You are matched with whoever is searching at the same time, on the game server. The server runs the match: it decides hits, health, rounds and the score. To test it yourself, open the game in a second browser window or on another device and queue there too.</p>
       <div class="stack">
@@ -330,44 +336,44 @@
 <div id="map-loading" class="hidden"><span id="map-loading-text">Loading map&hellip;</span></div>
 
 <script src="vendor/three.min.js"></script>
-<script src="js/config.js?v=20261026f"></script>
-<script src="js/util.js?v=20261026f"></script>
-<script src="js/weapondata.js?v=20261026f"></script>
-<script src="js/settings.js?v=20261026f"></script>
-<script src="js/menulayout.js?v=20261026f"></script>
-<script src="js/stats.js?v=20261026f"></script>
-<script src="js/mesh-testarena.js?v=20261026f"></script>
-<script src="js/mesh-lobby.js?v=20261026f"></script>
-<script src="js/mapdata-testarena.js?v=20261026f"></script>
-<script src="js/mapdata-bridge.js?v=20261026f"></script>
-<script src="js/mapdata-crossroads.js?v=20261026f"></script>
-<script src="js/mapdata-docks.js?v=20261026f"></script>
-<script src="js/mapdata-station.js?v=20261026f"></script>
-<script src="js/mapdata-backrooms.js?v=20261026f"></script>
-<script src="js/maps.js?v=20261026f"></script>
-<script src="js/collision.js?v=20261026f"></script>
-<script src="js/grensim.js?v=20261026f"></script>
-<script src="js/player.js?v=20261026f"></script>
-<script src="js/netproto.js?v=20261026f"></script>
-<script src="js/input.js?v=20261026f"></script>
-<script src="js/audio.js?v=20261026f"></script>
-<script src="js/models-weapons.js?v=20261026f"></script>
-<script src="js/vmanim.js?v=20261026f"></script>
-<script src="js/viewmodel.js?v=20261026f"></script>
-<script src="js/fx.js?v=20261026f"></script>
-<script src="js/render.js?v=20261026f"></script>
-<script src="js/post.js?v=20261026f"></script>
-<script src="js/icons.js?v=20261026f"></script>
-<script src="js/hud.js?v=20261026f"></script>
-<script src="js/weapons.js?v=20261026f"></script>
-<script src="js/grenades.js?v=20261026f"></script>
-<script src="js/bots.js?v=20261026f"></script>
-<script src="js/modes.js?v=20261026f"></script>
-<script src="js/menubg.js?v=20261026f"></script>
-<script src="js/lobby.js?v=20261026f"></script>
-<script src="js/netclient.js?v=20261026f"></script>
-<script src="js/online.js?v=20261026f"></script>
-<script src="js/ui.js?v=20261026f"></script>
-<script src="js/main.js?v=20261026f"></script>
+<script src="js/config.js?v=20261027g"></script>
+<script src="js/util.js?v=20261027g"></script>
+<script src="js/weapondata.js?v=20261027g"></script>
+<script src="js/settings.js?v=20261027g"></script>
+<script src="js/menulayout.js?v=20261027g"></script>
+<script src="js/stats.js?v=20261027g"></script>
+<script src="js/mesh-testarena.js?v=20261027g"></script>
+<script src="js/mesh-lobby.js?v=20261027g"></script>
+<script src="js/mapdata-testarena.js?v=20261027g"></script>
+<script src="js/mapdata-bridge.js?v=20261027g"></script>
+<script src="js/mapdata-crossroads.js?v=20261027g"></script>
+<script src="js/mapdata-docks.js?v=20261027g"></script>
+<script src="js/mapdata-station.js?v=20261027g"></script>
+<script src="js/mapdata-backrooms.js?v=20261027g"></script>
+<script src="js/maps.js?v=20261027g"></script>
+<script src="js/collision.js?v=20261027g"></script>
+<script src="js/grensim.js?v=20261027g"></script>
+<script src="js/player.js?v=20261027g"></script>
+<script src="js/netproto.js?v=20261027g"></script>
+<script src="js/input.js?v=20261027g"></script>
+<script src="js/audio.js?v=20261027g"></script>
+<script src="js/models-weapons.js?v=20261027g"></script>
+<script src="js/vmanim.js?v=20261027g"></script>
+<script src="js/viewmodel.js?v=20261027g"></script>
+<script src="js/fx.js?v=20261027g"></script>
+<script src="js/render.js?v=20261027g"></script>
+<script src="js/post.js?v=20261027g"></script>
+<script src="js/icons.js?v=20261027g"></script>
+<script src="js/hud.js?v=20261027g"></script>
+<script src="js/weapons.js?v=20261027g"></script>
+<script src="js/grenades.js?v=20261027g"></script>
+<script src="js/bots.js?v=20261027g"></script>
+<script src="js/modes.js?v=20261027g"></script>
+<script src="js/menubg.js?v=20261027g"></script>
+<script src="js/lobby.js?v=20261027g"></script>
+<script src="js/netclient.js?v=20261027g"></script>
+<script src="js/online.js?v=20261027g"></script>
+<script src="js/ui.js?v=20261027g"></script>
+<script src="js/main.js?v=20261027g"></script>
 </body>
 </html>

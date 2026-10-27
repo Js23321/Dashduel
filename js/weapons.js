@@ -25,6 +25,8 @@
     BY_ID = RV.WEAPON_BY_ID,
     ARMOR = RV.ARMOR,
     damageAt = RV.damageAt;
+  /** Quick melee (F): seconds the fists stay out after the one punch, before the weapon comes back. */
+  const QUICK_PUNCH_TIME = 0.2;
 
   class Loadout {
     constructor(game) {
@@ -63,7 +65,8 @@
       this.holding = false; // pin out, grenade held while aiming
       this.holdT = 0; // seconds the grenade has been held at the hold pose
       this.thrown = false; // the grenade of this throw has left the hand
-      this.quick = null; // a running quick melee / quick grenade (F / G), see below
+      this.quick = null; // a running quick melee (F), see below
+      this._quickNade = false; // an instant grenade (G) waiting for the next update(), which has the eye and the view
       this._syncView();
     }
 
@@ -130,9 +133,9 @@
 
     // ---------------------------------------------------------------- quick actions
     /**
-     * F: take the fists out, throw ONE punch as soon as they are up, and put the weapon you had back. The fists are in hand for the whole
-     * of it (about 0.65 s), and the double jump belongs to the fists, so a jump pressed in that time frame is a double jump.
-     * With the fists already out it is just a punch.
+     * F: take the fists out, throw ONE punch as soon as they are up, and put the weapon you had back. The fists are in hand for the whole of
+     * it (about 0.2 s up, a 0.2 s punch, the weapon coming back takes its own switch time: about 0.65 s all in), and the double jump belongs to
+     * the fists, so a jump pressed in that time frame is a double jump. With the fists already out it is just a punch.
      */
     quickMelee() {
       if (this.quick || !this.g.canShoot()) return false;
@@ -147,20 +150,20 @@
       return true;
     }
 
-    /** G: take a grenade out, throw it at once (no holding, no aiming circle), and put the weapon you had back. */
+    /**
+     * G: throw a grenade INSTANTLY. Nothing is taken out and nothing is animated: the weapon in your hand stays exactly as it is, the grenade
+     * just leaves along your view (the same grenade, the same stock and cooldown as a held throw, but no pin, no hold and no aiming sphere).
+     * The throw itself is done by update(), which has the eye and the view of that frame.
+     */
     quickGrenade() {
-      if (this.quick || !this.g.canShoot()) return false;
+      if (!this.g.canShoot()) return false;
       if (this.grenades <= 0) {
         RV.audio.play('empty');
         RV.hud.toast('Grenade ready in ' + Math.ceil(this.gregen) + ' s');
         return false;
       }
-      if (this.gcd > 0 || this.throwT >= 0) return false;
-      if (this.cur === 3) return this._startThrow(true); // already in hand: a plain throw
-      const prev = this.cur,
-        last = this.last;
-      this._quickSelect(3);
-      this.quick = { kind: 'nade', prev, last, stage: 0, wait: 0 };
+      if (this.gcd > 0 || this.throwT >= 0 || this._quickNade) return false;
+      this._quickNade = true;
       return true;
     }
 
@@ -184,30 +187,23 @@
       if (!q) return;
       q.wait += dt;
       if (this.g.playerDead) return this._quickEnd();
-      if (this.cur !== (q.kind === 'melee' ? 2 : 3)) {
+      if (this.cur !== 2) {
         this.quick = null;
         return;
       }
       if (q.stage === 0) {
-        // waiting for the weapon to come up, then the one punch / the pin (a throw starts without holding: it is released by itself)
-        if (q.kind === 'melee') {
-          if (this.switchT <= 0 && this.cd <= 0 && ctx.canFire) {
-            this._punch(ctx);
-            this.cd = this.weapon.interval;
-            this.fireBuf = 0;
-            q.stage = 1;
-            q.wait = 0;
-          }
-        } else if (this.switchT <= 0 && this.gcd <= 0 && ctx.canFire && this._startThrow(false)) {
+        // waiting for the fists to come up, then the one punch
+        if (this.switchT <= 0 && this.cd <= 0 && ctx.canFire) {
+          this._punch(ctx);
+          this.cd = this.weapon.interval;
+          this.fireBuf = 0;
           q.stage = 1;
           q.wait = 0;
         }
         if (q.stage === 0 && q.wait > 1.2) this._quickEnd(); // (could not start: the frozen countdown, a refusal: give the weapon back)
         return;
       }
-      if (q.kind === 'melee') {
-        if (q.wait >= this.weapon.interval + 0.1) this._quickEnd(); // the punch has landed and its cooldown is over
-      } else if (this.throwT < 0 || (this.thrown && this.throwT >= RV.vmanim.THROW.total * RV.vmanim.THROW.release + 0.2)) this._quickEnd(); // thrown (or cancelled)
+      if (q.wait >= QUICK_PUNCH_TIME) this._quickEnd(); // the punch has landed: the weapon comes back
     }
 
     cancelThrow() {
@@ -346,6 +342,10 @@
         if (this.cd < 0) this.cd = 0;
       }
 
+      if (this._quickNade) {
+        this._quickNade = false;
+        if (ctx.canFire !== false && this.grenades > 0 && this.gcd <= 0 && this.throwT < 0) this._launchGrenade(ctx, true);
+      }
       this._quickStep(dt, ctx);
 
       // throw sequence: pin -> hold (aiming, path preview, then the circle comes for you) -> wind-up ->
@@ -429,16 +429,23 @@
     }
 
     _release(ctx) {
+      this.thrown = true;
+      this._launchGrenade(ctx, false);
+    }
+
+    /** The grenade leaves the hand: stock, cooldown, sound, and either the server (online) or the local simulation spawns it. */
+    _launchGrenade(ctx, quick) {
       this.g.protUntil = 0; // attacking ends spawn protection
       const gw = BY_ID.grenade;
-      this.thrown = true;
       this.grenades--;
       this.gcd = gw.interval;
       if (this.grenades < gw.maxCount && this.gregen > this.regenTime()) this.gregen = this.regenTime();
       this.g.session.grenades = (this.g.session.grenades || 0) + 1;
       RV.audio.play('throw');
-      if (RV.online.isNet(this.g)) RV.online.sendNade(ctx.fwd); // the grenade appears when the server spawns it
-      else RV.grenades.throwFrom(this.g, ctx.eye, ctx.fwd, ctx.vel, gw);
+      if (RV.online.isNet(this.g)) {
+        if (quick) RV.online.sendNadeQuick();
+        else RV.online.sendNade(ctx.fwd); // the grenade appears when the server spawns it
+      } else RV.grenades.throwFrom(this.g, ctx.eye, ctx.fwd, ctx.vel, gw);
     }
 
     // ---------------------------------------------------------------- fists

@@ -243,6 +243,7 @@
     O.ui = ui;
     O.queueing = true;
     O.matched = false;
+    O.voting = false;
     O.started = false;
     O.leaving = false;
     O.rematching = false;
@@ -265,7 +266,20 @@
     O.refreshStatus();
   };
 
+  /** The server paired us and opened the map vote: the queue screen shows the maps on offer. */
+  O.onVote = function (m) {
+    if (!O.queueing || !O.ui || !Array.isArray(m.opts)) return;
+    O.voting = true;
+    if (O.ui.onVote) O.ui.onVote(m);
+  };
+
+  /** Vote for one of the maps on offer (the server counts the last vote of each player). */
+  O.vote = function (mapId) {
+    if (O.voting) NC.send({ t: 'vote', map: mapId });
+  };
+
   O.refreshStatus = function () {
+    if (O.voting) return; // (the vote has the screen: no "searching" text over it)
     if (O.ffa && O.queueing && O.ui && NC.state === 'open') O.ui.onStatus('Joining the free-for-all… ' + NC.describe(), 'joining');
     else if (O.queueing && O.ui && NC.state === 'open') O.ui.onStatus('Searching for an opponent… ' + NC.describe() + (NC.queued ? ' · ' + NC.queued + ' in queue' : ''), 'searching');
   };
@@ -273,6 +287,7 @@
   O.cancelQueue = function () {
     if (O.queueing) NC.send({ t: 'unqueue' });
     O.queueing = false;
+    O.voting = false;
     if (O.phase === 'idle') {
       NC.onclose = null;
       NC.close();
@@ -604,7 +619,21 @@
         if (ffa) O.onRoundWon(m);
         return;
       case 'queued':
+        O.voting = false;
         O.refreshStatus();
+        break;
+      case 'vote':
+        O.onVote(m);
+        break;
+      case 'votes':
+        if (O.voting && O.ui && O.ui.onVotes) O.ui.onVotes(m.n || {});
+        break;
+      case 'voteend':
+        if (O.voting && O.ui && O.ui.onVoteEnd) O.ui.onVoteEnd(m.map);
+        break;
+      case 'votecancel':
+        O.voting = false;
+        if (O.ui && O.ui.onVoteCancel) O.ui.onVoteCancel();
         break;
       case 'match':
         O.onMatch(m);
@@ -684,6 +713,7 @@
     O.mapId = m.map;
     O.matched = true;
     O.queueing = false;
+    O.voting = false;
     if (O.rematching) {
       // a rematch: the old game is over, a fresh one is loaded straight away
       O.rematching = false;
@@ -701,6 +731,7 @@
     if (O.started && O.isNet(g) && O.phase !== 'over') {
       O.beginReconnect(reason);
     } else if (O.queueing || O.rematching || (O.matched && !O.started)) {
+      O.voting = false;
       O.queueing = false;
       O.rematching = false;
       O.matched = false;
@@ -1343,6 +1374,7 @@
   O.sendNadeCancel = () => O.sendAct('nadecancel');
   O.sendNade = () => O.sendAct('nade');
   O.sendNadeSelf = () => O.sendAct('nadeself');
+  O.sendNadeQuick = () => O.sendAct('nadeq'); // the instant throw (G): no pin, no weapon change
   /** (kept so the game code can ask whether damage may happen: the server decides, so never locally) */
   O.canDamage = function () {
     return false;

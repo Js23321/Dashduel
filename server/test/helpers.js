@@ -52,6 +52,8 @@ class TestClient {
         this.send({ t: 'spong', ts: m.ts });
         return;
       }
+      // the map vote of a fresh pairing: unless a test wants to look at it (autoVote = false), vote for the first map on offer at once
+      if (m.t === 'vote' && this.autoVote !== false && m.opts && m.opts.length) this.send({ t: 'vote', map: m.opts[0] });
       m._at = Date.now();
       this.bytes += typeof e.data === 'string' ? e.data.length : 0;
       this.msgs.push(m);

@@ -76,13 +76,14 @@ are rejected and counted):
 |---|---|---|
 | `hello` | `v, name, tok?` | Handshake: protocol version, display name, optional session token to resume |
 | `queue` / `unqueue` / `ready` / `leave` / `rematch` | none | Lobby and match flow |
+| `vote` | `map` | Your vote in the map vote that opens when you are paired (one of the maps in the server's `vote` message; your last vote counts) |
 | `in` | `rn, q, r:[[k,fw,sd,flags,yaw,pitch,slot],…], c?:[x,y,z,fx]` | A batch of input: round number, sequence number of the first step, runs of `k` identical 1/120 s steps, and optionally the client's *predicted position* after the last step (`c`) with the id of the last correction it applied |
-| `act` | `rn, q, a, s` | A request: `fire punch reload nadepin nadecancel nade nadeself`, made at input step `q`, with weapon slot `s`. **No direction, no timestamp, no damage** |
+| `act` | `rn, q, a, s` | A request: `fire punch reload nadepin nadecancel nade nadeself nadeq` (`nadeq` = the instant throw: no pin, no weapon change, needs a grenade in stock), made at input step `q`, with weapon slot `s`. **No direction, no timestamp, no damage** |
 | `ping` / `spong` | `ts` | Latency |
 
 | `ffa` | `map` | Join the always-running free-for-all room of a map (protocol 4) |
 
-Server → client: `welcome` (session id, token for a new session, and `ffa: {map: players}` / `ffaCap`), `queued`, `match`, `resume`, `round`, `live`, `snap`
+Server → client: `welcome` (session id, token for a new session, and `ffa: {map: players}` / `ffaCap`), `queued`, `vote` (the maps on offer `opts`, `secs`, `opp`), `votes` (the count per map `n`), `voteend` (the winning `map`), `votecancel` (the other player left), `match`, `resume`, `round`, `live`, `snap`
 (30 Hz), `hurt`, `hit`, `fx`, `nade`, `boom`, `roundEnd`, `matchEnd`, `fix`, `opp` (away/back), `rematch`, `warn`, `err`,
 `sping`, `pong`. The free-for-all adds `ffa` (you are in the room of this map, your slot, the list; the client loads the map and answers `ready`), `fspawn` (you are in the world:
 life number `rn`, full movement state, spawn index, ammo, protection), `fsnap` (30 Hz: your health / ammo / acknowledged input step and `os`, the array of the players you can see:
@@ -111,8 +112,9 @@ cannot be seen is a sound without positions, as in 1v1).
 * **Session:** `hello` without a token creates a session (`sessions.js`): 12 random bytes for the id, signed with
   HMAC-SHA256 using `SESSION_SECRET` (random per start if unset). A token is verified in constant time. A valid token
   on a new connection **replaces** the old connection of the same session (a session is never in two places).
-* **Queue:** `queue` puts the connection in a FIFO list; two live, distinct sessions become a `Room` (random map from
-  the duel maps). A session already inside a running match that sends `queue` is *re-attached* to that
+* **Queue:** `queue` puts the connection in a FIFO list; two live, distinct sessions are paired and first **vote on the map**
+  (protocol 6: `vote` with 3 maps picked at random from the pool, 12 s, `vote` / `votes` / `voteend` / `votecancel`, see `Lobby.startVote`; `MAP_VOTE=0` switches it off and the server
+  picks a random map again), then become a `Room` on the winning map (most votes; a tie or no votes at all is decided by chance; if one player leaves the other goes back to the front of the queue). A session already inside a running match that sends `queue` is *re-attached* to that
   match instead of being queued twice.
 * **Isolation:** each room has its own players, history, grenades and timers; nothing is shared. A bug or exception in
   one room aborts that room (both players are told) and never touches the others. Closed rooms are removed from the

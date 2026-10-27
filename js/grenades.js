@@ -54,20 +54,22 @@
       GR.list.push({ on: false, mesh: g, bandMat, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, t: 0, fuse: 2, rest: false, spin: 0, ax: 0, az: 0, tick: 0, bounceSfx: 0 });
     }
 
-    // ---- aiming preview: dotted path + landing circle (+ a faint ring at the blast radius)
+    // ---- aiming preview: ONE thin line (the path) and a sphere where it goes off (the size of the blast, with a small solid core at the point of impact)
     GR.pts = new Float32Array(PN * 3);
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(GR.pts, 3).setUsage(THREE.DynamicDrawUsage));
     geo.setDrawRange(0, 0);
     GR.pgeo = geo;
-    GR.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }));
-    GR.dots = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false }));
-    GR.line.frustumCulled = GR.dots.frustumCulled = false;
-    const ringMat = (op) => new THREE.MeshBasicMaterial({ color: 0x3fd8c0, transparent: true, opacity: op, side: THREE.DoubleSide, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
-    GR.ring = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.52, 40), ringMat(0.95));
-    GR.ringBlast = new THREE.Mesh(new THREE.RingGeometry(0.94, 1, 72), ringMat(0.3)); // scaled to the blast radius when shown
-    GR.ringDot = new THREE.Mesh(new THREE.CircleGeometry(0.1, 16), ringMat(0.95));
-    for (const o of [GR.line, GR.dots, GR.ring, GR.ringBlast, GR.ringDot]) {
+    GR.line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, depthWrite: false }));
+    GR.line.frustumCulled = false;
+    const sphereMat = (op, back) => new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: op, side: back ? THREE.BackSide : THREE.FrontSide, depthWrite: false });
+    // the whole preview is white, always (line, sphere and core); only the ticking warns that it is closing in
+    // the blast: a translucent sphere of the blast radius (drawn from inside as well, so standing in it tints the view), and a small solid core
+    GR.ring = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), sphereMat(0.1, false));
+    GR.ringBack = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 18), sphereMat(0.08, true));
+    GR.ringDot = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), sphereMat(0.95, false));
+    GR.dots = GR.ringBlast = GR.ringBack; // (old names, kept so nothing that still reads them breaks)
+    for (const o of [GR.line, GR.ring, GR.ringBack, GR.ringDot]) {
       o.visible = false;
       R.scene.add(o);
     }
@@ -252,7 +254,7 @@
     if (!show) {
       GR._start = null;
       GR._tickT = 0;
-      if (GR.line.visible || GR.ring.visible) for (const o of [GR.line, GR.dots, GR.ring, GR.ringBlast, GR.ringDot]) o.visible = false;
+      if (GR.line.visible || GR.ring.visible) for (const o of [GR.line, GR.ring, GR.ringBack, GR.ringDot]) o.visible = false;
       return;
     }
     const gw = RV.WEAPON_BY_ID.grenade;
@@ -283,17 +285,12 @@
       const z = GR._start.z + (pb.z - GR._start.z) * e;
       let y = g.world.floorBelow(x, Math.max(GR._start.y, pb.y) + 2.5, z, 0.3);
       if (!isFinite(y)) y = GR._start.y + (pb.y - GR._start.y) * e;
-      GR.line.visible = GR.dots.visible = false;
-      GR.ring.visible = GR.ringBlast.visible = GR.ringDot.visible = true;
-      GR._n.set(0, 1, 0);
-      for (const o of [GR.ring, GR.ringBlast, GR.ringDot]) {
-        o.position.set(x, y + 0.03, z);
-        o.quaternion.setFromUnitVectors(GR._z, GR._n);
-      }
-      GR.ringBlast.scale.setScalar(gw.radius);
-      // teal -> red as it closes in, and a ticking that speeds up
-      GR.ring.material.color.setRGB(0.25 + 0.75 * e, 0.85 - 0.55 * e, 0.75 - 0.5 * e);
-      GR.ringDot.material.color.copy(GR.ring.material.color);
+      GR.line.visible = false;
+      GR.ring.visible = GR.ringBack.visible = GR.ringDot.visible = true;
+      for (const o of [GR.ring, GR.ringBack, GR.ringDot]) o.position.set(x, y + 0.1, z);
+      GR.ring.scale.setScalar(gw.radius);
+      GR.ringBack.scale.setScalar(gw.radius);
+      // a ticking that speeds up as it closes in (the colour stays white)
       GR._tickT -= ctx.dt || 0.016;
       if (GR._tickT <= 0) {
         GR._tickT = 0.45 - 0.37 * e;
@@ -302,25 +299,18 @@
       return;
     }
     GR._start = null;
-    GR.ring.material.color.setRGB(0.25, 0.85, 0.75);
-    GR.ringDot.material.color.copy(GR.ring.material.color);
     const n = GR.predict(g, L);
     GR.pgeo.setDrawRange(0, n);
     GR.pgeo.attributes.position.needsUpdate = true;
-    GR.line.visible = GR.dots.visible = true;
+    GR.line.visible = true;
     const imp = GR.imp;
     const on = imp.hit;
-    GR.ring.visible = GR.ringBlast.visible = GR.ringDot.visible = on;
+    GR.ring.visible = GR.ringBack.visible = GR.ringDot.visible = on;
     if (on) {
-      const nrm = GR._n.set(imp.nx, imp.ny, imp.nz);
-      const px = imp.x + imp.nx * 0.03,
-        py = imp.y + imp.ny * 0.03,
-        pz = imp.z + imp.nz * 0.03;
-      for (const o of [GR.ring, GR.ringBlast, GR.ringDot]) {
-        o.position.set(px, py, pz);
-        o.quaternion.setFromUnitVectors(GR._z, nrm);
-      }
-      GR.ringBlast.scale.setScalar(gw.radius);
+      // the sphere sits a little above the impact point (the blast is centred a bit above the floor, see server explode(): y + 0.12)
+      for (const o of [GR.ring, GR.ringBack, GR.ringDot]) o.position.set(imp.x + imp.nx * 0.1, imp.y + imp.ny * 0.1 + 0.12, imp.z + imp.nz * 0.1);
+      GR.ring.scale.setScalar(gw.radius);
+      GR.ringBack.scale.setScalar(gw.radius);
     }
   };
 

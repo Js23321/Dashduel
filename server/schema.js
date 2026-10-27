@@ -12,7 +12,7 @@ const RV = S.RV;
 const isNum = (v) => typeof v === 'number' && isFinite(v);
 const isInt = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,64}\.[A-Za-z0-9_-]{16,64}$/;
-const ACTIONS = ['fire', 'punch', 'reload', 'nadepin', 'nadecancel', 'nade', 'nadeself'];
+const ACTIONS = ['fire', 'punch', 'reload', 'nadepin', 'nadecancel', 'nade', 'nadeself', 'nadeq'];
 const PI = Math.PI + 0.01;
 
 const simple = (t) => () => ({ t });
@@ -34,6 +34,10 @@ const TYPES = {
     return typeof m.map === 'string' && /^[a-z0-9_]{2,24}$/.test(m.map) ? { t: 'ffa', map: m.map } : null;
   },
   unqueue: simple('unqueue'),
+  /** The map vote of a freshly paired match: one of the maps on offer. */
+  vote(m) {
+    return typeof m.map === 'string' && /^[a-z0-9_]{2,24}$/.test(m.map) ? { t: 'vote', map: m.map } : null;
+  },
   ready: simple('ready'),
   leave: simple('leave'),
   rematch: simple('rematch'),

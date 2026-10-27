@@ -467,7 +467,7 @@
   /** Cosmetic tracer start in camera space (hip: near the muzzle; ADS: near the sight line). */
   /**
    * Where a tracer starts, as an offset in the MAIN camera's space: the point of the weapon's real muzzle (SPEC.muzzle, followed through the
-   * model's pose, recoil-free hip pose, ADS and every animation) seen on screen through the view-model camera, then put back into the world
+   * model's pose, hip pose, ADS and every animation, the shot shake included) seen on screen through the view-model camera, then put back into the world
    * through the main camera at the same depth. The view-model is drawn with its own fixed 60 degree camera while the game camera changes
    * with the field-of-view setting and the aiming zoom, so a fixed offset (the old way) drifted away from the barrel whenever the model, the
    * pose or the FOV changed: the bullet has to leave the muzzle you see.

@@ -38,8 +38,9 @@
     WALK: 8.5,
     SPRINT: 8.5,
     CROUCH: 4.0,
-    GROUND_ACCEL: 14, // (must stay above FRICTION or the run speed could not be reached)
-    FRICTION: 11, // crisp stops: from a run the body is still in about 0.15 s and half a metre
+    GROUND_ACCEL: 24, // (must stay above FRICTION or the run speed could not be reached) full run speed from a standstill in about 60 ms
+    FRICTION: 12, // crisp stops: from a run the body is still in about 0.13 s and under half a metre
+    GROUND_GRIP: 20, // per second: the part of your velocity that does not point where the keys say (the drift after a direction change) is cut at this rate
     STOP_SPEED: 4.5,
     LAND_GRACE: 0.09, // reduced friction right after landing (hop window)
     LAND_GRACE_FRICTION: 0.12, // ... to this share of FRICTION
@@ -47,6 +48,13 @@
     // air
     AIR_STRAFE_ACCEL: 30, // m/s^2 of sideways authority
     AIR_STRAFE_CAP: 1.8, // m/s of wish-speed the strafe rule can add along a direction
+    AIR_STRAFE_MAX: 19, // the strafe rule never takes you above this speed (it can still turn you; speed you already have is kept)
+    // Over-speed: speed above SPEED_SOFT can only come from a boost (a grenade blast, a launch pad, a long drop). It is kept while you are in the air
+    // and bleeds off on the ground: a share of the excess at every landing / take-off and continuously while running or sliding, so slide jumps and
+    // bunny hops cannot hold a boost (or add boosts on top of each other) for ever.
+    SPEED_SOFT: 15,
+    LAND_BLEED: 0.4, // share of the excess lost at each landing
+    GROUND_BLEED: 3.0, // share of the excess lost per second on the ground (running, sliding)
     AIR_BRAKE: 10, // authority when you push against your own velocity
     AIR_WISH_SPEED: 6.0, // low-speed steering target
     AIR_ACCEL: 9,
@@ -57,12 +65,12 @@
     SLIDE_MIN: 5.5,
     SLIDE_END: 3.0,
     SLIDE_BOOST: 2.5,
-    SLIDE_BOOST_CAP: 13,
+    SLIDE_BOOST_CAP: 12,
     SLIDE_BOOST_CD: 0.6,
     SLIDE_DECEL: 4.6, // a slide runs out in about 1.5 s
     SLIDE_TURN: 1.5,
     SLIDE_JUMP_BONUS: 1.5,
-    SLIDE_JUMP_CAP: 16,
+    SLIDE_JUMP_CAP: 14,
 
     // walls
     WALL_PROBE: 0.45, // how close a wall must be to latch on (generous: grazing it counts)
@@ -78,6 +86,11 @@
     WALL_STICK: 1.4,
     WALL_GRACE: 0.12,
     WALLJUMP_UP: 8.8,
+    // A wall jump can lift you at most this far above where you last stood (the ground, or a launch pad's apex): up to CLIMB_FREE m above it a wall jump
+    // gives its full upward kick, over the next CLIMB_FADE m the kick fades out. Without it two close walls (a chimney, a narrow alley) were a ladder
+    // to any height. Wall jumps along a corridor, and the push-off sideways, are not affected.
+    CLIMB_FREE: 3.2,
+    CLIMB_FADE: 1.6,
     WALLJUMP_NORMAL: 0.8,
     WALLJUMP_MIN_SPEED: 7.5,
     WALLJUMP_MIN_OUT: 5,
@@ -93,7 +106,7 @@
   });
 
   const SLIDE_STATES = { stand: 0, crouch: 1, slide: 2 };
-  const STATE_LEN = 43; // length of getState()
+  const STATE_LEN = 44; // length of getState()
 
   class Player {
     constructor(world) {
@@ -168,6 +181,7 @@
       this.wjRunnable = false;
       this.padCd = 0;
       this.noSteer = 0;
+      this.climbBase = y; // feet height of the last ground contact (see CLIMB_FREE)
       this.hopChain = 0;
       this.lastHopTime = 99;
       this.fallSpeed = 0;
@@ -287,6 +301,7 @@
       if (b.grounded && !this.jumpedThisStep) {
         if (this.mode === 'slide') this._slideMove(dt, wx, wz, hasWish);
         else this._groundMove(dt, wx, wz, wl, hasWish, cmd);
+        this._bleed(Math.min(1, P.GROUND_BLEED * dt));
         b.vy = 0;
         dy = 0;
       } else {
@@ -340,6 +355,7 @@
         if (wasAir) this._land(Math.max(this.fallSpeed, -preVy));
         this.fallSpeed = 0;
         if (b.vy < 0) b.vy = 0;
+        this.climbBase = b.y;
       } else {
         if (wasGrounded && !this.jumpedThisStep) {
           // walked off an edge: leaving a rising ramp launches you along the slope
@@ -464,6 +480,19 @@
       if (this.mode === 'crouch') wishSpeed = P.CROUCH;
       else wishSpeed = P.RUN;
       wishSpeed *= wl;
+      // grip: sideways drift is not allowed to carry on (it is what made a turn feel like sliding on ice). Not right after a landing, where the
+      // reduced friction keeps a bunny hop's speed.
+      if (this.groundTime >= P.LAND_GRACE) {
+        const al = b.vx * wx + b.vz * wz;
+        const px = b.vx - al * wx,
+          pz = b.vz - al * wz;
+        const ps = Math.sqrt(px * px + pz * pz);
+        if (ps > 0.001) {
+          const k = Math.max(0, ps - Math.max(ps, P.STOP_SPEED) * P.GROUND_GRIP * dt) / ps;
+          b.vx = al * wx + px * k;
+          b.vz = al * wz + pz * k;
+        }
+      }
       const cur = b.vx * wx + b.vz * wz;
       const add = wishSpeed - cur;
       if (add <= 0) return;
@@ -483,6 +512,13 @@
       if (add > 0) {
         b.vx += wx * add;
         b.vz += wz * add;
+        // ... it turns the velocity, but never takes it beyond AIR_STRAFE_MAX (or beyond what it already was)
+        const lim = Math.max(P.AIR_STRAFE_MAX, speedH);
+        const ns = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
+        if (ns > lim) {
+          b.vx *= lim / ns;
+          b.vz *= lim / ns;
+        }
       }
 
       // 2) low-speed steering so slow jumps stay controllable
@@ -516,6 +552,7 @@
       const b = this.b;
       const fromSlide = this.mode === 'slide';
       b.vy = P.JUMP_V;
+      this._bleed(P.LAND_BLEED * 0.5); // (a take-off is a ground contact too: bunny hops and slide jumps never run a ground step)
       // jumping while running UP a slope keeps the climb speed (ramp jumps carry further)
       const sn = this.slopeN;
       if (sn.y > 0.01 && sn.y < 0.999) {
@@ -569,8 +606,19 @@
       this._emit('doublejump', { x: b.x, y: b.y, z: b.z });
     }
 
+    /** Lose `share` (0..1) of the speed above SPEED_SOFT. */
+    _bleed(share) {
+      const b = this.b;
+      const sp = Math.sqrt(b.vx * b.vx + b.vz * b.vz);
+      if (sp <= P.SPEED_SOFT) return;
+      const k = (sp - share * (sp - P.SPEED_SOFT)) / sp;
+      b.vx *= k;
+      b.vz *= k;
+    }
+
     _land(impact) {
       const b = this.b;
+      this._bleed(P.LAND_BLEED);
       this.wallStamina = 4.0;
       this.lastWallKey = -1;
       this._endWallRun(false);
@@ -726,7 +774,8 @@
         b.vx += nx * (P.WALLJUMP_MIN_OUT - out);
         b.vz += nz * (P.WALLJUMP_MIN_OUT - out);
       }
-      b.vy = P.WALLJUMP_UP;
+      const climb = RV.clamp(1 - (b.y - this.climbBase - P.CLIMB_FREE) / P.CLIMB_FADE, 0, 1);
+      b.vy = Math.max(b.vy, P.WALLJUMP_UP * climb); // (never takes upward speed away; never adds more than the full kick)
       b.grounded = false;
       this.jumpedThisStep = true;
       this.jumpBuf = 0;
@@ -769,6 +818,7 @@
             b.vz = p.vz + b.vz * p.keep;
             b.vy = p.vy;
             b.grounded = false;
+            this.climbBase = b.y + (p.vy > 0 ? (p.vy * p.vy) / (2 * P.GRAVITY) : 0) - P.CLIMB_FREE; // measured from the launch's apex
             this.padCd = P.PAD_CD;
             this.noSteer = 0.45; // keep the launch trajectory predictable
             this.jumpBuf = 0;
@@ -844,6 +894,7 @@
       a[i++] = this.slopeN.y;
       a[i++] = this.slopeN.z;
       a[i++] = this.speedH;
+      a[i++] = this.climbBase;
       return a;
     }
 
@@ -897,6 +948,7 @@
       this.slopeN.y = a[i++];
       this.slopeN.z = a[i++];
       this.speedH = a[i++];
+      this.climbBase = a[i++];
       b.hitX = b.hitZ = 0;
       b.hitUp = b.landed = b.stepped = false;
       this.prevX = b.x;

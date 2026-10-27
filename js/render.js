@@ -1366,7 +1366,10 @@
     }
     for (const b of R.botMeshes || []) R.scene.remove(b.group);
     R.botMeshes = [];
-    for (const t of R.tracers) t.mesh.visible = false;
+    for (const t of R.tracers) {
+      t.on = false;
+      t.mesh.visible = false;
+    }
     for (const s of R.sparks) s.sprite.visible = false;
     if (RV.fx && RV.fx.ready) RV.fx.clear();
   };
@@ -1656,15 +1659,51 @@
   R._buildEffects = function () {
     R.tracers = [];
     R.sparks = [];
-    const tg = new THREE.BoxGeometry(1, 1, 1);
-    for (let i = 0; i < 20; i++) {
-      const mat = new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.9, fog: false, depthWrite: false });
+    // Tracers: a thin glowing STREAK that flies from the muzzle to the impact (a bright head, a tail that fades out behind it), drawn as a
+    // flat ribbon that always turns its face to the camera. One shared texture: a solid hot core with a darker warm rim across (so it still reads
+    // against the bright arena walls), a long fade along. Plain alpha blending: additive light would vanish on white concrete.
+    const tc = document.createElement('canvas');
+    tc.width = 16;
+    tc.height = 64;
+    {
+      const g = tc.getContext('2d');
+      const img = g.createImageData(16, 64);
+      for (let y = 0; y < 64; y++) {
+        const along = 1 - y / 63; // 0 = tail ... 1 = head (canvas row 0 is the top = v 1 = the head end, the texture is flipped on upload)
+        const fade = Math.pow(along, 0.75) * (along > 0.94 ? 1 - ((along - 0.94) / 0.06) * 0.4 : 1);
+        for (let x = 0; x < 16; x++) {
+          const across = Math.abs(x - 7.5) / 7.5;
+          const core = Math.min(1, 1.6 * Math.exp(-across * across * 3.2));
+          const rim = across * across; // 0 in the middle, 1 at the edge: the edge takes a darker, redder tone of the weapon's colour
+          const i = (y * 16 + x) * 4;
+          img.data[i] = 255;
+          img.data[i + 1] = Math.round(255 * (1 - 0.35 * rim));
+          img.data[i + 2] = Math.round(255 * (1 - 0.75 * rim));
+          img.data[i + 3] = Math.round(255 * core * fade);
+        }
+      }
+      g.putImageData(img, 0, 0);
+    }
+    const ttex = new THREE.CanvasTexture(tc);
+    ttex.generateMipmaps = false; // (a mip level would average the whole width into a faint smear once the streak is only a couple of pixels wide)
+    ttex.minFilter = THREE.LinearFilter;
+    ttex.magFilter = THREE.LinearFilter;
+    const tg = new THREE.BufferGeometry();
+    tg.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 0, 1, -0.5, 0, 1], 3));
+    tg.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+    tg.setIndex([0, 1, 2, 0, 2, 3]);
+    for (let i = 0; i < 24; i++) {
+      const mat = new THREE.MeshBasicMaterial({ map: ttex, color: 0xfff2b0, transparent: true, opacity: 1, fog: false, depthWrite: false, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(tg, mat);
       mesh.visible = false;
       mesh.frustumCulled = false;
+      mesh.matrixAutoUpdate = false;
       R.scene.add(mesh);
-      R.tracers.push({ mesh, mat, life: 0, max: 0.07 });
+      R.tracers.push({ mesh, mat, on: false, age: 0, ox: 0, oy: 0, oz: 0, ax: 0, ay: 0, az: -1, len: 1, w: 0.012 });
     }
+    R._tx = new THREE.Vector3();
+    R._ty = new THREE.Vector3();
+    R._tz = new THREE.Vector3();
     for (let i = 0; i < 16; i++) {
       const mat = new THREE.SpriteMaterial({ map: R.texGlow, color: 0xffffff, transparent: true, depthWrite: false, fog: false });
       const sprite = new THREE.Sprite(mat);
@@ -1683,14 +1722,55 @@
     const dx = hx - ox, dy = hy - oy, dz = hz - oz;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (len < 0.01) return;
-    const m = t.mesh;
-    m.position.set(ox + dx / 2, oy + dy / 2, oz + dz / 2);
-    m.lookAt(hx, hy, hz);
-    const w = width || 0.035;
-    m.scale.set(w, w, len);
+    t.ox = ox;
+    t.oy = oy;
+    t.oz = oz;
+    t.ax = dx / len;
+    t.ay = dy / len;
+    t.az = dz / len;
+    t.len = len;
+    t.w = Math.max(0.01, (width || 0.03) * 0.5); // thin: about a centimetre and a half next to you (it widens a little with distance, see _updateEffects)
+    t.age = 0;
+    t.on = true;
     t.mat.color.setHex(color || 0xfff2b0);
-    t.mat.opacity = 0.9;
-    t.life = t.max;
+    t.mat.opacity = 1;
+    t.mesh.visible = true;
+    R._placeTracer(t);
+  };
+
+  const TRACER_SPEED = 600; // m/s of the streak's head (cosmetic: the shot itself is instant)
+  const TRACER_TAIL = 14; // m of streak behind the head
+
+  /** Put the streak where it is at t.age: head and tail along the path, the ribbon turned towards the camera. */
+  R._placeTracer = function (t) {
+    const head = Math.min(t.len, t.age * TRACER_SPEED);
+    const tail = Math.min(t.len, Math.max(0, t.age * TRACER_SPEED - TRACER_TAIL));
+    const seg = head - tail;
+    if (seg < 0.02) {
+      t.mesh.visible = false;
+      return;
+    }
+    const mx = t.ox + t.ax * (tail + seg / 2),
+      my = t.oy + t.ay * (tail + seg / 2),
+      mz = t.oz + t.az * (tail + seg / 2);
+    const c = R.camera.position;
+    const vx = c.x - mx,
+      vy = c.y - my,
+      vz = c.z - mz;
+    const X = R._tx.set(t.ay * vz - t.az * vy, t.az * vx - t.ax * vz, t.ax * vy - t.ay * vx); // axis x view = the width direction
+    let xl = X.length();
+    if (xl < 1e-5) X.set(1, 0, 0);
+    else X.multiplyScalar(1 / xl);
+    const Z = R._tz.set(t.ax, t.ay, t.az);
+    const Y = R._ty.crossVectors(Z, X);
+    const dist = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    // thin, but never thinner than about two screen pixels (a real centimetre-wide line would vanish into a pixel at range)
+    const px = (2 * Math.tan((R.camera.fov * Math.PI) / 360) * dist) / Math.max(120, R.renderer.domElement.height);
+    const w = Math.max(t.w * (1 + dist / 40), px * 3);
+    const m = t.mesh;
+    m.matrix.makeBasis(X.multiplyScalar(w), Y, Z.multiplyScalar(seg));
+    m.matrix.setPosition(t.ox + t.ax * tail, t.oy + t.ay * tail, t.oz + t.az * tail);
+    m.matrixWorldNeedsUpdate = true; // (matrixAutoUpdate is off: the matrix above is the object's transform)
     m.visible = true;
   };
 
@@ -1708,10 +1788,12 @@
 
   R._updateEffects = function (dt) {
     for (const t of R.tracers) {
-      if (!t.mesh.visible) continue;
-      t.life -= dt;
-      if (t.life <= 0) t.mesh.visible = false;
-      else t.mat.opacity = 0.9 * (t.life / t.max);
+      if (!t.on) continue;
+      t.age += dt;
+      if (t.age * TRACER_SPEED - TRACER_TAIL >= t.len) {
+        t.on = false;
+        t.mesh.visible = false;
+      } else R._placeTracer(t);
     }
     for (const s of R.sparks) {
       if (!s.sprite.visible) continue;

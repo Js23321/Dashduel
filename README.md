@@ -104,9 +104,16 @@ It is shown to opponents in Online 1v1, on the score row and in the kill feed. C
   Trial, Practice) works without it. **If the server cannot be reached the game says so; it never fakes an opponent.**
   Setup, trade-offs (serverless vs persistent server) and deployment steps: **[docs/ONLINE_BACKEND.md](docs/ONLINE_BACKEND.md)**.
 * **Queue:** *Online 1v1* → the queue screen (connecting / searching / matched, with connection status and a retry button
-  if the server is unreachable) → when two players are searching they are matched into their own isolated room and each
+  if the server is unreachable) → when two players are searching they are paired, and the **map vote** opens first (below) → they are put into their own isolated room and
   the match **starts by itself** (no confirm screen). The browser only lets a page capture the mouse after a click, so if
   it has not been captured yet a "Click to capture the mouse" prompt shows; one click and you are in.
+* **Map vote:** as soon as two players are paired, the queue screen turns into a vote: **3 different maps** from the pool (picked at random, the same 3 for both),
+  a 12 second countdown and a card per map with its description and the votes it has. Click a card or press **1 / 2 / 3**; you can change your vote until the time is up. It ends
+  as soon as **both** have voted. The map with more votes wins; if the votes are split (1 : 1), or nobody voted, **chance** decides (between the voted maps, or between all three when
+  nobody voted); if only one of you voted, that vote wins when the time runs out. The winner is marked on the screen while the map loads. If one player leaves during the vote
+  (closes the page, presses Cancel), the other one is told and goes back to searching, first in line. A rematch keeps the map and has no vote. Server side: `startVote` /
+  `onVote` / `finishVote` / `cancelVote` in `server/lobby.js`, settings `MAP_VOTE=0` (off: the server picks a random map, as before), `VOTE_OPTIONS` (3), `VOTE_SECONDS` (12);
+  client: `UI.showVote` and the vote handlers in `js/online.js`; tests: `server/test/vote.test.js`.
 * **Rules:** first to **5 round wins**, 150 health each. Each round: both players spawn on opposite sides (a **different pair of spawn points each round**), a **3 second
   countdown** with movement and shooting locked (this is the spawn protection: nobody can move, shoot or be hurt before "FIGHT"), then the fight; a round ends on an elimination (or after 90 s: most
   health wins). Between rounds nobody is frozen. Maps: Arena, Bridge, Crossroads, Docks, Station, Backrooms (a random one per match).
@@ -150,7 +157,7 @@ default models, the real-world bases are the ones the RIVALS wiki names): the **
 (`_models/assault-rifle/AssualtRifle.obj`, converted by `tools/blender/build_rifle.py`; the first procedural version is in
 `_archive/build_rifle_procedural.py`): an orange SCAR-style rifle with a navy frame, vent slots, a ribbed black magazine and two flip-up
 **ring sights**. **Its sight is one circle**: you aim through the octagonal rear ring and see the front ring and its spike standing inside it; the
-magazine and a small dial on the receiver are animated parts (the dial pumps back on every shot); the **Handgun** is an all-black
+magazine and the **charging handle** (the short stick that sticks out of the left side of the handguard) are animated parts (the handle slides back on every shot); the **Handgun** is an all-black
 USP-style slab with a square bore, three vents and two pins on the slide; the **Grenade** is a faceted dark-green M67 with a gold
 collar and a navy fuze and lever; the **Fists** are two thick, short block arms (black sleeve, skin-coloured hand end). They are exported as
 data (`js/models-weapons.js`). Animated pieces (magazine, slide, charging handle, trigger, grenade lever and pin) are separate
@@ -196,7 +203,7 @@ while aiming the supporting forearm tips down out of the sight picture.
 the low hip position to the middle of the screen over a still world looked like a gun floating across the picture. Now the *view* turns
 toward the sight (the world pans, the gun stays where it is relative to it) and the gun only makes the small remaining adjustment, so
 the **front sight ends exactly on the crosshair**. How it works (`js/vmanim.js`, `js/modes.js`):
-* Each weapon has a sight anchor in its `SPEC` (`post` = front sight, else `sight` = rear sight), an eye relief `er` / `erCentre`, a sight
+* Each weapon has a sight anchor in its `SPEC` (`post` = front sight, else `sight` = rear sight), an eye relief `er` / `erCentre` (how far the rear sight is from your eye: the aimed rifle sits close, 0.22 m with centred sights / 0.30 m with the gun held to the side; handgun 0.19 / 0.23 m), a sight
   yaw `adsYaw`, a share `camShare` (how much of the aiming movement the camera does, default 0.6) and, in `js/weapondata.js`, its own
   `adsFovMul` (ADS zoom), `adsIn` / `adsOut` (blend times). Nothing is hard-coded per weapon: `adsCamera(spec)` measures the angle between
   the anchor in the hip pose and the middle of the screen, turns the camera by `camShare` of it, and defines the gun's pose in the
@@ -244,7 +251,9 @@ is now 0 by default). The 2 s respawn protection stays in **Deathmatch** (`RV.SP
   against their *current* hitboxes in that same moment. Animations, hands and sounds are cosmetic and never change a hit.
 * **Headshots:** a hit on the head deals ×1.25 damage (RIVALS' crit: 12 → 15). **Damage numbers** pop up beside the crosshair: **white for a body
   shot, red for a headshot** (kills are drawn a little larger).
-* Tracers, sparks, muzzle flash and shell casings are created *after* the hit is resolved. The tracer starts at the muzzle you see: the game
+* Tracers, sparks, muzzle flash and shell casings are created *after* the hit is resolved. A tracer is a **thin glowing streak** (about a centimetre
+  and a half wide, never thinner than three pixels on screen, a warm rim around a bright core) that flies from the muzzle to the hit in a few
+  frames with a long tail fading out behind it. The tracer starts at the muzzle you see: the game
   projects the model's real muzzle point (through its pose, the aiming move and the field of view) onto the screen and starts the tracer there
   (`VM.tracerOffset`), so it follows the barrel of whatever model is in hand. Right mouse aims down sights
   (hold, or toggle in settings): the gun turns in so its front sight is on the crosshair (see *First-person weapon position*). Only the picture
@@ -258,19 +267,19 @@ as a guard. **Only while the Fists are equipped:** press `Space` once more in th
 normal jump** (1.6 m). It refreshes when you touch the ground, keeps your momentum and air strafing (the held direction nudges
 your course), shows a small ring effect (the fists themselves do not move for it), and never replaces a bunny hop or a wall jump. Switching away
 turns it off at once; switching back mid-air never grants a second one if you already used it.
-**Quick melee (`F`):** instead of switching by hand, press `F`: the fists come out, throw **one punch** as soon as they are up, and the weapon you had comes back (about 0.65 s in all; the
+**Quick melee (`F`):** instead of switching by hand, press `F`: the fists come out, throw **one punch** as soon as they are up, and the weapon you had comes back (about 0.65 s in all: the fists are up in 0.2 s, the punch is over 0.2 s later, then the weapon comes back; the
 "previous weapon" slot is left as it was). The fists are in your hands for that whole time, so **a jump pressed in that time frame is a double jump** - jump, tap `F`, jump again. With the fists already
-out, `F` is just one punch. Choosing a weapon yourself during it ends it. **Quick grenade (`G`):** the grenade comes out, is thrown at once (no holding, no aiming circle) and the weapon comes back; with no
-grenade left it only tells you when the next is ready. Both work online (the server sees the weapon changes in your input and decides the punch and the grenade like any other; no extra rule), and both keys can be
+out, `F` is just one punch. Choosing a weapon yourself during it ends it. **Quick grenade (`G`):** an **instant throw with no animation**: nothing is taken out, the weapon in your hand does not change, and the grenade just leaves along your view (no pin, no holding, no aiming sphere); with no
+grenade left it only tells you when the next is ready. Both work online (the server sees the fists in your input and decides the punch like any other; the instant throw is its own request, `nadeq`, that needs a grenade in stock and nothing else), and both keys can be
 rebound in *Settings → Keybinds* (the old *Previous weapon* key moved to `V`).
 
 ### Grenade
-* **Hold a mouse button** (left or right) to pull the pin and aim: a dotted line shows the path and a **circle shows
-  where it lands** (a faint ring shows the 6 m blast). **Release to throw** along your view. **R** (or switching weapon)
-  cancels and you keep the grenade.
-* **Keep holding and the circle comes for you.** It sits where it would land for the first 0.6 s, then slides towards
-  you — slowly at first, then faster, turning from teal to red with a faster and higher warning beep — and exactly
-  1.8 s after the pin came out it touches you and explodes. A thin bar under the crosshair shows the 1.8 s (tick at 0.6 s).
+* **Hold a mouse button** (left or right) to pull the pin and aim: **one thin line** shows the path and a **sphere shows
+  where it goes off** (the size of the 6 m blast, with a small solid core where it lands). **Release to throw** along your view. **R** (or
+  switching weapon) cancels and you keep the grenade.
+* **Keep holding and the sphere comes for you.** It sits where it would land for the first 0.4 s, then slides towards
+  you — slowly at first, then faster, with a faster and higher warning beep (the preview itself stays **white**: line, sphere and core never change colour) — and exactly
+  1.2 s after the pin came out it touches you and explodes. A thin bar under the crosshair shows the 1.2 s (tick at 0.4 s).
   That is a free **grenade boost**: you are launched away from the blast (a grenade at your feet = straight up, about 8 m: the boost is
   strong, 21 m/s at the centre, within 7 m of the blast).
 * It is the only projectile: a thrown one flies with gravity, bounces off walls and floors, and explodes 1.2 s after
@@ -283,7 +292,7 @@ rebound in *Settings → Keybinds* (the old *Previous weapon* key moved to `V`).
 All four weapons are held by the same pair of **block fists**: one thick rectangular block each, a black sleeve (most of it) and a
 skin-coloured hand on its end (`buildFist` in `js/viewmodel.js`; on the guns and the grenade they are drawn at 70-80 % so they never cover the
 sight picture). They follow every animation: idle, run, slide, jump,
-landing dip, firing (trigger / bolt / slide — no recoil), reloads (the supporting hand pulls the magazine), weapon
+landing dip, firing (at the hip the **rifle** is thrown back towards you and springs forward past where it was, mostly along the barrel, with a small up-and-down a quarter swing behind it (about 1 cm against 5 cm back and forth), so each shot sends the gun round a small oval, never pitching it up or rocking it, and a full-auto burst keeps it circling; **while aiming down the sights it does not shake at all** (only its charging handle slides back), and nothing your body does moves an aimed gun either: the slide and wall-run tilts fade out as you aim, like the walking bob and the jump sag already did;  the **handgun** does not shake: only its slide (the top) cycles; this is only the picture, your aim never moves: still **zero recoil** for the shot), reloads (the supporting hand pulls the magazine), weapon
 switching, the grenade pin pull and throw and punches (the double jump has no hand animation). The weapon is drawn in its own pass, so it
 never clips into walls.
 
@@ -307,7 +316,7 @@ double jump, landing and UI all have their own sounds.
 | Reload | **R** |
 | Weapons | **1–4**, mouse wheel, **V** previous weapon |
 | Quick melee | **F**: the fists come out, **one punch**, your weapon comes back. A jump pressed while the fists are out is a **double jump** |
-| Quick grenade | **G**: take a grenade out, throw it at once (no holding), your weapon comes back; with none left it says when the next is ready |
+| Quick grenade | **G**: an instant throw with no animation (the weapon in hand does not change); with none left it says when the next is ready |
 | Quick restart | **T** |
 | Back to checkpoint / spawn | **Q** (time trial, practice) |
 | Practice: set spawn | **E** |
@@ -316,13 +325,16 @@ double jump, landing and UI all have their own sounds.
 
 ## Movement guide
 * **Slide** – hold slide while running: instant (capped) speed boost, keeps momentum, gains speed downhill, fits under low gaps.
-* **Slide jump** – press jump mid-slide to keep the speed and add a little.
-* **Speed and floor** – you run at **8.5 m/s** in every direction; the floor is grippy: letting go of the keys stops you in about 0.15 s (half a metre), and a
+* **Slide jump** – press jump mid-slide to keep the speed and add a little (a chain of slide jumps settles at **14 m/s** and stays there).
+* **Speed and floor** – you run at **8.5 m/s** in every direction; the floor is grippy: you are at full speed about 60 ms after pressing a key, a 90° change of direction takes
+  about 50 ms (the sideways drift is cut at once, no skating), letting go of the keys stops you in about 0.13 s (under half a metre), and a
   slide runs out in about 1.5 s. A jump rises 1.6 m.
 * **Bunny hop** – landing with a jump queued (or auto-hop held) skips ground friction, so speed is never lost.
-* **Air strafe** – in the air hold **A** or **D** and turn the mouse the same way: speed climbs with every well-timed hop.
+* **Air strafe** – in the air hold **A** or **D** and turn the mouse the same way: speed climbs with every well-timed hop, up to about **19 m/s**.
 * **Wall run** – jump alongside a **teal striped wall** while holding forward: you hold height and speed for a few seconds.
-* **Wall jump** – press jump on any wall (or mid wall run) to push off towards where you're looking, keeping your speed.
+* **Wall jump** – press jump on any wall (or mid wall run) to push off towards where you're looking, keeping your speed. The upward kick works up to
+  about 3 m above where you last stood (the ground, or the apex of a launch pad's throw) and fades out over the next 1.6 m: two close walls (a chimney,
+  a narrow alley) used to be a ladder to any height, now they take you to about 4.5 m and no further. Wall-jump chains along a corridor are unchanged.
 * **Double jump** – fists only (see above). **Grenade boost** – see above.
 * **Ramps & pads** – run up a ramp and jump off its end to carry the climb speed; launch pads throw you far.
 * **The maps are fenced.** Every duel map has an invisible fence on the inner faces of its outer walls and a ceiling above them (`play` in
@@ -331,7 +343,12 @@ double jump, landing and UI all have their own sounds.
   **force field** (`barrier`) stands above the wall tops up to the ceiling. Collision never throws a body to the far end of a solid any more (that
   was the "I glitch and teleport out" bug: a body brushing the side of a catwalk or a wall while falling was lifted onto its top or pushed 20 m along
   it; `World._unstick` now finds the nearest way out). (`server/test/map.test.js` fuzzes every map with extreme launches.)
-* No fixed top speed. The physics step is a fixed 120 Hz with render interpolation, so movement is identical at 30, 60 or 144 FPS.
+* **Boost speed is a burst, not a stockpile.** Anything above 15 m/s can only come from a boost (a grenade blast, a launch pad, a long drop). It is
+  kept while you are in the air and bleeds away on the ground: a share of the excess at every landing and take-off (so bunny hops and slide jumps
+  cannot hold it) and continuously while you run or slide. Air strafing turns you but never pushes you past 19 m/s. This closed the bug where a
+  grenade boost followed by slide jumping kept you very fast for ever and repeated blasts stacked up to 60 m/s
+  (`server/test/speed.test.js` checks slide-jump chains, strafing, blasts at your feet and behind you, and that blasts do not stack).
+* The physics step is a fixed 120 Hz with render interpolation, so movement is identical at 30, 60 or 144 FPS.
 
 ## Interface, the 3D lobby and the classic menu
 Two interface styles, switchable in *Settings -> Interface -> Interface style* (instant, remembered, never touches a match):

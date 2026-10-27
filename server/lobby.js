@@ -35,7 +35,8 @@ class Client {
     this.id = crypto.randomBytes(4).toString('hex'); // connection id until the handshake gives the session id
     this.session = null;
     this.name = '';
-    this.state = 'new'; // new | idle | queued | room
+    this.state = 'new'; // new | idle | queued | voting | room
+    this.vote = null; // the map vote this client is in
     this.room = null;
     this.seat = -1;
     this.rtt = 80;
@@ -107,6 +108,7 @@ class Lobby {
   constructor() {
     this.clients = new Set();
     this.queue = [];
+    this.votes = new Set(); // map votes in progress (two paired players each)
     this.rooms = new Set();
     this.ffa = new Map(); // map id -> its always-running free-for-all room
     if (CFG.FFA.ENABLED) {
@@ -170,6 +172,7 @@ class Lobby {
     else this.perIp.set(c.ip, n);
     const qi = this.queue.indexOf(c);
     if (qi >= 0) this.queue.splice(qi, 1);
+    if (c.vote) this.cancelVote(c.vote, c); // (the other player goes back to the front of the queue)
     const s = c.session;
     if (s && s.client === c && !c.replaced) {
       s.client = null;
@@ -245,7 +248,11 @@ class Lobby {
     }
     if (c.state === 'new') return;
     switch (m.t) {
+      case 'vote':
+        this.onVote(c, m);
+        return;
       case 'ffa': {
+        if (c.vote) this.cancelVote(c.vote, c); // (leaving a map vote for a free-for-all room)
         const s = c.session;
         const wait = ac.lockedFor(s.id, c.ip);
         if (wait) {
@@ -299,6 +306,7 @@ class Lobby {
         return;
       }
       case 'unqueue': {
+        if (c.vote) this.cancelVote(c.vote, c);
         const i = this.queue.indexOf(c);
         if (i >= 0) this.queue.splice(i, 1);
         if (c.state === 'queued') c.state = 'idle';
@@ -325,15 +333,99 @@ class Lobby {
         this.queue.unshift(a); // (cannot happen: one connection per session) never match a session with itself
         continue;
       }
-      const pool = CFG.MAPS.filter((id) => RV.maps[id]); // (a map whose data file is missing is skipped, never played)
-      const map = pool[Math.floor(Math.random() * pool.length)];
-      const room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
-      a.state = b.state = 'room';
-      a.session.room = b.session.room = room;
-      this.rooms.add(room);
-      this.totals.matches++;
-      log.info('match_start', { room: room.id, map, a: a.session.id, b: b.session.id, an: a.name, bn: b.name });
+      this.startVote(a, b);
     }
+  }
+
+  /** The maps a match can be played on (a map whose data file is missing is skipped, never played). */
+  mapPool() {
+    return CFG.MAPS.filter((id) => RV.maps[id]);
+  }
+
+  /** Two players were paired: they vote on the map first (or, with the vote switched off, the server picks one). */
+  startVote(a, b) {
+    const pool = this.mapPool();
+    const n = Math.min(pool.length, Math.max(2, CFG.VOTE.OPTIONS));
+    if (!CFG.VOTE.ENABLED || pool.length < 2) return this.startRoom(a, b, pool[Math.floor(Math.random() * pool.length)]);
+    const opts = pool
+      .map((id) => ({ id, r: Math.random() }))
+      .sort((x, y) => x.r - y.r)
+      .slice(0, n)
+      .map((o) => o.id);
+    const v = { a, b, opts, votes: new Map(), until: now() + CFG.VOTE.SECONDS * 1000 };
+    a.state = b.state = 'voting';
+    a.vote = b.vote = v;
+    this.votes.add(v);
+    for (const [c, o] of [
+      [a, b],
+      [b, a],
+    ])
+      c.send({ t: 'vote', opts, secs: CFG.VOTE.SECONDS, opp: o.name });
+    log.info('vote_start', { a: a.session.id, b: b.session.id, opts });
+  }
+
+  /** A player's vote (they may change it until the vote closes). A late or stray vote is simply ignored. */
+  onVote(c, m) {
+    const v = c.vote;
+    if (!v || c.state !== 'voting') return;
+    if (v.opts.indexOf(m.map) < 0) {
+      this.violate(c, 'bad_message', { why: 'vote' });
+      return;
+    }
+    v.votes.set(c, m.map);
+    const n = {};
+    for (const id of v.opts) n[id] = 0;
+    for (const id of v.votes.values()) n[id]++;
+    for (const p of [v.a, v.b]) p.send({ t: 'votes', n });
+    if (v.votes.size >= 2) this.finishVote(v);
+  }
+
+  /** The vote is over (both voted, or time ran out): the most votes win, a tie or no votes at all is decided by chance. */
+  finishVote(v) {
+    if (!this.votes.delete(v)) return;
+    const n = new Map();
+    for (const id of v.opts) n.set(id, 0);
+    for (const id of v.votes.values()) n.set(id, n.get(id) + 1);
+    const top = Math.max(...n.values());
+    const cands = v.opts.filter((id) => n.get(id) === top);
+    const map = cands[Math.floor(Math.random() * cands.length)];
+    v.a.vote = v.b.vote = null;
+    for (const c of [v.a, v.b]) c.send({ t: 'voteend', map });
+    if (!v.a.alive() || !v.b.alive()) {
+      // (cannot normally happen: a closing connection cancels its vote first) whoever is still here searches again
+      for (const c of [v.a, v.b]) if (c.alive()) this.requeue(c);
+      return;
+    }
+    this.startRoom(v.a, v.b, map);
+  }
+
+  /** One of the two left (closed the connection, stopped searching, went to a free-for-all room): the other one searches again, first in line. */
+  cancelVote(v, gone) {
+    if (!this.votes.delete(v)) return;
+    v.a.vote = v.b.vote = null;
+    if (gone && gone.state === 'voting') gone.state = 'idle';
+    const other = v.a === gone ? v.b : v.a;
+    if (other && other !== gone && other.alive()) {
+      other.send({ t: 'votecancel', why: 'left' });
+      this.requeue(other, true);
+    }
+  }
+
+  requeue(c, front) {
+    c.state = 'queued';
+    if (front) this.queue.unshift(c);
+    else this.queue.push(c);
+    c.send({ t: 'queued', ...this.info() });
+    this.tryMatch();
+  }
+
+  startRoom(a, b, map) {
+    const room = new Room(this.nextRoom++, map, a, b, (r) => this.roomClosed(r));
+    a.state = b.state = 'room';
+    a.session.room = b.session.room = room;
+    this.rooms.add(room);
+    this.totals.matches++;
+    log.info('match_start', { room: room.id, map, a: a.session.id, b: b.session.id, an: a.name, bn: b.name });
   }
 
   roomClosed(room) {
@@ -354,6 +446,7 @@ class Lobby {
     const t = now();
     const dt = Math.min(0.1, (t - this.lastTick) / 1000);
     this.lastTick = t;
+    for (const v of [...this.votes]) if (t >= v.until) this.finishVote(v);
     for (const r of [...this.rooms, ...this.ffa.values()]) {
       try {
         r.tick(t, dt);

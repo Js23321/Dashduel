@@ -41,7 +41,7 @@
       // Hold the button to aim (a path line + landing circle), release to throw. If you keep holding,
       // after `hold.still` s the circle starts sliding towards you (slowly, then faster) and reaches you
       // `hold.total` s after the pin came out: it touches you and explodes (a self boost, no damage to you).
-      hold: { still: 0.6, total: 1.8 },
+      hold: { still: 0.4, total: 1.2 },
       // fuse = seconds after release; speed in m/s along the view direction; arc = extra upward angle (rad)
       fuse: 1.2, speed: 17, arc: 0.17, radius: 6, minDmgFrac: 1, selfMul: 0, maxCount: 1, regen: 30, regenPractice: 8,
       // self boost: a blast within boostRadius shoves you away from it (no damage to you)

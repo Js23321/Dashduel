@@ -625,6 +625,7 @@
     $('btn-queue-retry').classList.add('hidden');
     $('btn-queue-retry').textContent = retryLabel;
     $('btn-queue-net').classList.add('hidden');
+    UI.endVoteView();
     const t0 = Date.now();
     clearInterval(UI.queueTimer);
     UI.queueTimer = setInterval(() => {
@@ -637,6 +638,23 @@
         st.className = 'queue-status';
         st.textContent = text;
         if (ph === 'searching') $('queue-opp').textContent = '?';
+      },
+      // the map vote of a fresh pairing (online 1v1): the maps on offer, the counts, the winner, or "the other player left"
+      onVote: (m) => {
+        $('queue-opp').textContent = m.opp || '?';
+        $('queue-title').textContent = 'Match found';
+        st.className = 'queue-status';
+        st.textContent = 'Pick the map you want to play';
+        UI.showVote(m);
+      },
+      onVotes: (n) => UI.updateVote(n),
+      onVoteEnd: (map) => UI.endVote(map),
+      onVoteCancel: () => {
+        UI.endVoteView();
+        $('queue-opp').textContent = '?';
+        $('queue-title').textContent = title;
+        st.className = 'queue-status';
+        st.textContent = 'Your opponent left. Searching for a new one…';
       },
       onMatched: (opp) => {
         clearInterval(UI.queueTimer);
@@ -655,6 +673,7 @@
       },
       onError: (msg) => {
         clearInterval(UI.queueTimer);
+        UI.endVoteView();
         UI.rematchActive = false;
         $('btn-queue-enter').classList.add('hidden');
         $('btn-queue-retry').classList.remove('hidden');
@@ -672,6 +691,103 @@
     return cb;
   }
 
+  // ---------------------------------------------------------------- map vote (online 1v1)
+  /** Show the maps on offer (m: {opts: [map ids], secs}) as cards: click one or press 1 / 2 / 3; a countdown runs down. */
+  UI.showVote = function (m) {
+    const v = (UI.vote = { opts: m.opts.slice(), mine: null, until: Date.now() + (m.secs || 12) * 1000, total: (m.secs || 12) * 1000, ended: false });
+    const box = $('vote-cards');
+    box.innerHTML = '';
+    v.opts.forEach((id, i) => {
+      const map = RV.maps[id] || { name: id, desc: '', swatch: [], size: '' };
+      const card = document.createElement('div');
+      card.className = 'vote-card';
+      card.dataset.map = id;
+      card.setAttribute('tabindex', '0');
+      card.setAttribute('role', 'button');
+      const sw = (map.swatch || []).map((c) => '<i style="background:#' + ('000000' + c.toString(16)).slice(-6) + '"></i>').join('');
+      card.innerHTML =
+        '<span class="key">' + (i + 1) + '</span><div class="swatch">' + sw + '</div><h3>' + map.name + '<span class="tag">' + (map.size || '') + '</span></h3><p>' + (map.desc || '') + '</p><div class="votes"><b>0</b> votes</div>';
+      card.addEventListener('click', () => UI.castVote(id));
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          UI.castVote(id);
+        }
+      });
+      box.appendChild(card);
+    });
+    $('queue-vote').classList.remove('hidden');
+    $('scr-queue').querySelector('.panel').classList.add('voting');
+    $('queue-time').classList.add('hidden');
+    clearInterval(UI.voteTimer);
+    const tick = () => {
+      const left = Math.max(0, v.until - Date.now());
+      $('vote-time').textContent = String(Math.ceil(left / 1000));
+      $('vote-bar-fill').style.transform = 'scaleX(' + (left / v.total).toFixed(3) + ')';
+      if (left <= 0) clearInterval(UI.voteTimer);
+    };
+    tick();
+    UI.voteTimer = setInterval(tick, 100);
+    if (!UI.voteKeys) {
+      UI.voteKeys = (e) => {
+        const v2 = UI.vote;
+        if (!v2 || v2.ended || e.ctrlKey || e.altKey || e.metaKey) return;
+        const n = e.code && /^(Digit|Numpad)[1-9]$/.test(e.code) ? +e.code.slice(-1) - 1 : -1;
+        if (n >= 0 && n < v2.opts.length) {
+          e.preventDefault();
+          UI.castVote(v2.opts[n]);
+        }
+      };
+      window.addEventListener('keydown', UI.voteKeys);
+    }
+  };
+
+  UI.castVote = function (id) {
+    const v = UI.vote;
+    if (!v || v.ended || v.opts.indexOf(id) < 0) return;
+    v.mine = id;
+    for (const c of $('vote-cards').children) c.classList.toggle('mine', c.dataset.map === id);
+    RV.online.vote(id);
+  };
+
+  /** The server's count of votes per map. */
+  UI.updateVote = function (n) {
+    for (const c of $('vote-cards').children) {
+      const k = n[c.dataset.map] | 0;
+      c.querySelector('.votes').innerHTML = '<b>' + k + '</b> ' + (k === 1 ? 'vote' : 'votes');
+    }
+  };
+
+  /** The vote is over: the winner is marked while the match loads. */
+  UI.endVote = function (map) {
+    const v = UI.vote;
+    if (v) v.ended = true;
+    clearInterval(UI.voteTimer);
+    $('vote-time').textContent = '0';
+    $('vote-bar-fill').style.transform = 'scaleX(0)';
+    for (const c of $('vote-cards').children) {
+      c.classList.toggle('win', c.dataset.map === map);
+      c.classList.toggle('lost', c.dataset.map !== map);
+      c.classList.remove('mine');
+    }
+    const m = RV.maps[map];
+    $('queue-title').textContent = m ? m.name : 'Match found';
+    const st = $('queue-status');
+    st.textContent = 'Map chosen. Loading…';
+  };
+
+  /** Hide the vote (a new search, a cancelled vote, an error). */
+  UI.endVoteView = function () {
+    UI.vote = null;
+    clearInterval(UI.voteTimer);
+    const box = $('queue-vote');
+    if (box) box.classList.add('hidden');
+    const panel = $('scr-queue') && $('scr-queue').querySelector('.panel');
+    if (panel) panel.classList.remove('voting');
+    const qt = $('queue-time');
+    if (qt) qt.classList.remove('hidden');
+  };
+
   UI.startQueue = function () {
     UI.rematchActive = false;
     RV.online.queue(queueScreen('Finding an opponent', 'Try again'));
@@ -687,6 +803,7 @@
 
   UI.cancelQueue = function () {
     clearInterval(UI.queueTimer);
+    UI.endVoteView();
     if (UI.rematchActive) {
       // waiting for a rematch: the finished game is still loaded, so leaving it closes the room for the other player too
       UI.rematchActive = false;

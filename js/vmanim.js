@@ -3,8 +3,9 @@
  * Everything here is COSMETIC. It produces a pose for the weapon model, its moving
  * parts and both hands; it never touches the camera, the aim direction or the hit ray.
  * Rules it follows:
- *   - no weapon kick on firing (zero recoil): firing only animates the trigger, bolt /
- *     slide, the muzzle flash and the ejected casing (fists punch, grenades are thrown)
+ *   - firing shakes the RIFLE in the hand at the hip (a visual kick back along the barrel, then forward again, that rings out, `rec` below; SPEC.kick;
+ *     none while fully aimed; the handgun has none: only its slide cycles), moves the charging handle / slide and triggers the muzzle flash and the ejected casing (fists punch, grenades are
+ *     thrown); the aim never moves (zero recoil)
  *   - every motion is time based (dt), so it looks identical at 30, 60 or 144 FPS
  *   - every state change is blended (damped weights, eased progress), nothing snaps
  *   - at full ADS all movement is faded out and the sight sits exactly on the
@@ -54,8 +55,8 @@
     // hip poses follow the RIVALS first-person view (solved from its reference screenshots: tools/solve-hip-pose.js): the gun sits low on the
     // right, big, and its muzzle points in towards the crosshair (hipYaw / hipPitch, blended out while aiming), the muzzle ends up
     // just right of and below the crosshair so the centre of the screen stays clear
-    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1265, -0.36], scale: 0.6, hip: [0.12, -0.102, -0.352], hipYaw: 0, hipPitch: 0, sight: [0, 0.1265, 0.153], boltTravel: 0.05, er: 0.37, erCentre: 0.29, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
-    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.089, -0.322], hipYaw: 0, hipPitch: 0, sight: [0, 0.082, 0.095], er: 0.29, erCentre: 0.25, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
+    rifle: { camShare: 0.6, adsYaw: 0.12, post: [0, 0.1265, -0.36], scale: 0.6, hip: [0.12, -0.15, -0.335], hipYaw: 0, hipPitch: 0, sight: [0, 0.1265, 0.153], boltTravel: 0.075, kick: { z: 2.0, rx: 0, y: 0, side: 0, lift: 0.6, lag: 0.04 }, er: 0.3, erCentre: 0.22, muzzle: [0, 0.022, -0.66], eject: [0.04, 0.046, 0.065], fire: 'bolt', reload: 'mag', sprintPose: 1, cas: 'rifle', lhMag: [0.0, -0.05, 0.14] },
+    pistol: { camShare: 0.6, adsYaw: 0.1, post: [0, 0.082, -0.18], scale: 0.64, hip: [0.075, -0.118, -0.345], hipYaw: 0, hipPitch: 0, sight: [0, 0.082, 0.095], er: 0.23, erCentre: 0.19, muzzle: [0, 0.045, -0.2], eject: [0.03, 0.045, 0.0], fire: 'slide', reload: 'slidemag', sprintPose: 0.8, cas: 'pistol', lhMag: [0.0, -0.04, 0.0] },
     fists: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'punch', reload: 'none', sprintPose: 0.6, cas: null, noAds: true },
     grenade: { scale: 1, hip: [0, 0, 0], sight: [0, 0, 0], er: 0.3, muzzle: [0, 0, -0.3], eject: null, fire: 'throw', reload: 'none', sprintPose: 0.7, cas: null, noAds: true },
   };
@@ -320,6 +321,9 @@
       this.sp = { y: 0, vy: 0, r: 0, vr: 0 }; // landing / take-off spring
       this.vyF = 0;
       this.fireT = 99; // seconds since the last shot
+      this.rec = { z: 0, zV: 0, y: 0, yV: 0, rx: 0, rxV: 0, ry: 0, ryV: 0, rz: 0, rzV: 0 }; // the shake of the whole weapon after a shot (underdamped springs)
+      this.shots = 0; // shots fired (a repeatable pseudo-random source for the shake)
+      this.liftQ = []; // delayed upward pushes of the shake still to be applied: {t: seconds to go, v: speed}
       this.trigT = 99;
       this.punchT = 99; // seconds since the last punch
       this.punchSide = -1; // the hand of the NEXT punch alternates: -1 left, +1 right
@@ -361,6 +365,26 @@
         return;
       }
       if (sp.eject) this.casingQ++;
+      // the shot shakes the whole weapon: it is thrown back towards you, springs forward past where it was and rings out (the rifle's kick is mostly along
+      // the barrel plus a small up-and-down a quarter cycle behind it, so the gun goes round a small oval; `rx` / `y` / `side` in a SPEC.kick would
+      // add a pitch, a lift and a rock). Purely visual: the view, the aim and the shot never move
+      const k = sp.kick;
+      if (k) {
+        const n = ++this.shots;
+        const r1 = Math.sin(n * 12.9898) * 43758.5453,
+          r2 = Math.sin(n * 78.233 + 1.7) * 24634.6345;
+        const f1 = r1 - Math.floor(r1) - 0.5,
+          f2 = r2 - Math.floor(r2) - 0.5;
+        const rc = this.rec;
+        rc.zV += k.z * (0.9 + 0.2 * (f1 + 0.5));
+        rc.rxV += k.rx * (0.85 + 0.3 * (f2 + 0.5));
+        rc.yV += k.y;
+        // `lift` / `lag`: a small upward push that arrives `lag` s after the throw back (about a quarter of the swing), so the up-and-down is a quarter
+        // of a cycle behind the back-and-forth one and the gun goes round a small oval instead of along a line (no sudden jump: it is a speed)
+        if (k.lift) this.liftQ.push({ t: k.lag || 0.04, v: k.lift * (0.9 + 0.2 * (f1 + 0.5)) });
+        rc.ryV += f1 * k.side * 1.6;
+        rc.rzV += f2 * k.side * 2.4;
+      }
     }
 
     /** The punch that was just thrown connected with something. */
@@ -477,8 +501,8 @@
       ry += 0.64 * S;
       rz += -0.32 * S;
 
-      // slide pose
-      const L = smooth(w.slide);
+      // slide pose (faded out as you aim: a fully aimed gun does not move while you slide, the sight picture stays still)
+      const L = smooth(w.slide) * free;
       x += 0.03 * L;
       y += -0.032 * L;
       z += 0.035 * L;
@@ -486,9 +510,9 @@
       ry += 0.22 * L;
       rz += 0.55 * L;
 
-      // wall run: lean the weapon away from the wall
-      rz += -st.wallSide * 0.18 * w.wall;
-      x += -st.wallSide * 0.02 * w.wall;
+      // wall run: lean the weapon away from the wall (also faded out while aiming)
+      rz += -st.wallSide * 0.18 * w.wall * free;
+      x += -st.wallSide * 0.02 * w.wall * free;
 
       // airborne drift (rising: weapon sags, falling: it floats up)
       // low-pass the vertical speed: it changes abruptly on take-off / landing, the weapon must not
@@ -496,6 +520,42 @@
       const vy = Math.max(-18, Math.min(14, this.vyF));
       y += Math.max(-0.035, Math.min(0.035, -vy * 0.0035)) * w.air * free;
       rx += Math.max(-0.14, Math.min(0.14, vy * 0.0065)) * w.air * free;
+
+      // the shot shake: springs with a period of about 0.16 s, so a rifle that fires ten times a second keeps the whole gun trembling
+      const rc = this.rec;
+      for (let i = this.liftQ.length - 1; i >= 0; i--) {
+        const q = this.liftQ[i];
+        q.t -= dt;
+        if (q.t <= 0) {
+          rc.yV += q.v;
+          this.liftQ.splice(i, 1);
+        }
+      }
+      {
+        const KR = 1500,
+          CR = 36,
+          CRZ = 24, // (the back-and-forth along the barrel is less damped: it swings forward past the rest position)
+          n = 4,
+          h = dt / n;
+        for (let i = 0; i < n; i++) {
+          rc.zV += (-KR * rc.z - CRZ * rc.zV) * h;
+          rc.z += rc.zV * h;
+          rc.yV += (-KR * rc.y - CRZ * rc.yV) * h;
+          rc.y += rc.yV * h;
+          rc.rxV += (-KR * rc.rx - CR * rc.rxV) * h;
+          rc.rx += rc.rxV * h;
+          rc.ryV += (-KR * rc.ry - CR * rc.ryV) * h;
+          rc.ry += rc.ryV * h;
+          rc.rzV += (-KR * rc.rz - CR * rc.rzV) * h;
+          rc.rz += rc.rzV * h;
+        }
+      }
+      const rk = free; // (no shake at all once fully aimed: the sight picture stays still; the charging handle and the casings still move)
+      z += Math.max(-0.04, Math.min(0.06, rc.z)) * rk;
+      y += Math.max(-0.03, Math.min(0.03, rc.y)) * rk;
+      rx += Math.max(-0.06, Math.min(0.16, rc.rx)) * rk;
+      ry += Math.max(-0.05, Math.min(0.05, rc.ry)) * rk;
+      rz += Math.max(-0.08, Math.min(0.08, rc.rz)) * rk;
 
       // landing / take-off spring (a little survives in ADS so landings still read)
       const sk = 0.3 + 0.7 * free;
